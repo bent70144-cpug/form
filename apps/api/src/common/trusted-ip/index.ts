@@ -29,6 +29,7 @@ export {
   isRenderEnv,
   loadTrustedIpConfig,
   resolveDefaultTrustedProxyCount,
+  trustedIpConfigFromValues,
   TrustedIpConfigError,
   type TrustedIpConfig,
 } from "./config";

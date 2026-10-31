@@ -26,10 +26,12 @@ export const DEFAULT_TRUSTED_PROXY_HEADERS: readonly string[] = ["x-forwarded-fo
  * Zod-validated environment slice for the trusted-IP module (spec:
  * "environment configuration is Zod-validated and fails at startup").
  *
- * NOTE (ownership): `apps/api/src/env.ts` is owned by ticket 03's worktree, so
- * this schema lives inside the module for now. Ticket 04's endpoint wiring
- * merges these two variables into the main API env schema (see
- * docs/adr/0004-rate-limiting.md, "Wiring contract").
+ * NOTE (ownership): ticket 04 merged `TRUSTED_PROXY_COUNT` /
+ * `TRUSTED_PROXY_HEADERS` into the main API env schema (`apps/api/src/env.ts`,
+ * Zod-validated at startup). This module-local schema/loader stays as the
+ * standalone validation path (its unit tests pin the Render/loopback
+ * defaults); `createApiApp` builds its config with `trustedIpConfigFromValues`
+ * from the already-validated `ApiEnv`.
  */
 const trustedIpEnvSchema = z.object({
   TRUSTED_PROXY_COUNT: z.preprocess(
@@ -81,16 +83,48 @@ export function loadTrustedIpConfig(
     );
   }
   const { TRUSTED_PROXY_COUNT, TRUSTED_PROXY_HEADERS } = parsed.data;
+  return trustedIpConfigFromValues({
+    TRUSTED_PROXY_COUNT,
+    TRUSTED_PROXY_HEADERS,
+    RENDER: env.RENDER,
+    RENDER_SERVICE_ID: env.RENDER_SERVICE_ID,
+  });
+}
+
+/**
+ * Builds the config from ALREADY-VALIDATED values — the wiring path used by
+ * `createApiApp`, whose Zod-validated `ApiEnv` now owns
+ * `TRUSTED_PROXY_COUNT` / `TRUSTED_PROXY_HEADERS` (ticket 04 merged the
+ * variables into the main API env schema; this helper is the single place
+ * that applies the deployment defaults).
+ */
+export function trustedIpConfigFromValues(values: {
+  TRUSTED_PROXY_COUNT?: number | string;
+  TRUSTED_PROXY_HEADERS?: string;
+  RENDER?: string;
+  RENDER_SERVICE_ID?: string;
+}): TrustedIpConfig {
+  const count =
+    values.TRUSTED_PROXY_COUNT === "" || values.TRUSTED_PROXY_COUNT === undefined
+      ? undefined
+      : Number(values.TRUSTED_PROXY_COUNT);
+  const headers = values.TRUSTED_PROXY_HEADERS;
   return {
-    trustedProxyCount: TRUSTED_PROXY_COUNT ?? resolveDefaultTrustedProxyCount(env),
-    trustedProxyHeaders: TRUSTED_PROXY_HEADERS
-      ? splitHeaderList(TRUSTED_PROXY_HEADERS)
+    trustedProxyCount:
+      count !== undefined && Number.isFinite(count)
+        ? count
+        : resolveDefaultTrustedProxyCount(values),
+    trustedProxyHeaders: headers
+      ? splitHeaderList(headers)
       : [...DEFAULT_TRUSTED_PROXY_HEADERS],
   };
 }
 
 /** Default proxy-hop count for the current deployment environment. */
-export function resolveDefaultTrustedProxyCount(env: NodeJS.ProcessEnv): number {
+export function resolveDefaultTrustedProxyCount(env: {
+  RENDER?: string;
+  RENDER_SERVICE_ID?: string;
+}): number {
   return isRenderEnv(env) ? 1 : 0;
 }
 
@@ -98,7 +132,10 @@ export function resolveDefaultTrustedProxyCount(env: NodeJS.ProcessEnv): number 
  * Render injects `RENDER=true` and `RENDER_SERVICE_ID` into every service
  * container; either marker means the platform proxy fronts the app.
  */
-export function isRenderEnv(env: NodeJS.ProcessEnv): boolean {
+export function isRenderEnv(env: {
+  RENDER?: string;
+  RENDER_SERVICE_ID?: string;
+}): boolean {
   return (
     env.RENDER === "true" ||
     env.RENDER === "1" ||

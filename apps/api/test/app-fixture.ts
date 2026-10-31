@@ -33,6 +33,8 @@ export interface AuthCoreFixture {
   env: ApiEnv;
   expressApp: Awaited<ReturnType<typeof createApiApp>>["expressApp"];
   auth: Awaited<ReturnType<typeof createApiApp>>["auth"];
+  /** The app's process-wide limiter (rate-limit suites drive it via HTTP). */
+  rateLimiter: Awaited<ReturnType<typeof createApiApp>>["rateLimiter"];
   /** Reads the sink mailbox over its HTTP API (GET /dev/mailbox). */
   mailbox(): Promise<{ messages: Array<{ id: number; to: string[]; raw: string }> }>;
   /** Clears the sink mailbox (DELETE /dev/mailbox). */
@@ -43,8 +45,11 @@ export interface AuthCoreFixture {
 export async function createAuthCoreFixture(
   scratchDb: string,
   overrides: Partial<Record<string, string>> = {},
-  /** Extra createApiApp options (e.g. an explicit emailProvider override). */
-  appOptions: { emailProvider?: EmailProvider } = {},
+  /** Extra createApiApp options (email provider / rate-limit switch). */
+  appOptions: {
+    emailProvider?: EmailProvider;
+    rateLimits?: { enabled?: boolean };
+  } = {},
 ): Promise<AuthCoreFixture> {
   const appName = "http://localhost:3000";
   await createScratchDatabase(scratchDb);
@@ -91,7 +96,16 @@ export async function createAuthCoreFixture(
     SMTP_PORT: String(smtpPort ?? 0),
     ...overrides,
   });
-  const app = await createApiApp(env, { authPool, ...appOptions });
+  const app = await createApiApp(env, {
+    authPool,
+    ...appOptions,
+    // Ticket-04 rate limits are OFF for the shared fixture: the auth-core /
+    // round-trip suites perform many loopback sign-ins and would trip the
+    // per-IP sign-in limit for reasons unrelated to what they assert. The
+    // dedicated suites (auth-rate-limit, auth-reset, trusted-ip-rewrite) pass
+    // `rateLimits: { enabled: true }` and drive the REAL limits end-to-end.
+    rateLimits: appOptions.rateLimits ?? { enabled: false },
+  });
 
   const mailboxBase = `http://127.0.0.1:${httpPort ?? 0}/dev/mailbox`;
   return {
@@ -104,6 +118,7 @@ export async function createAuthCoreFixture(
     env,
     expressApp: app.expressApp,
     auth: app.auth,
+    rateLimiter: app.rateLimiter,
     async mailbox() {
       const res = await fetch(mailboxBase);
       if (!res.ok) throw new Error(`mailbox read failed: ${res.status}`);
