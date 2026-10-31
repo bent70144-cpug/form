@@ -271,6 +271,30 @@ async function dev() {
     MIGRATOR_DATABASE_URL: d.migratorDatabaseUrl,
   });
 
+  // 3.5 pg-boss schema DDL as the migrator + worker_user DML grants
+  //     (dev companion step; production: a migration owns both — ADR 0003).
+  const pgbossInstall = spawnSync(
+    "pnpm",
+    ["--filter", "@form/worker", "exec", "tsx", "src/install-pgboss.ts"],
+    {
+      cwd: ROOT,
+      env: {
+        ...process.env,
+        ADMIN_DATABASE_URL: d.adminDatabaseUrl,
+        MIGRATOR_DATABASE_URL: d.migratorDatabaseUrl,
+        WORKER_PASSWORD: d.workerPassword,
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+      encoding: "utf8",
+    },
+  );
+  if (pgbossInstall.status !== 0) {
+    process.stderr.write(
+      `[pgboss-install] failed (exit ${pgbossInstall.status})\n${pgbossInstall.stderr ?? ""}\n`,
+    );
+    process.exit(pgbossInstall.status ?? 1);
+  }
+
   // 4. Dev SMTP sink (Mailpit substitute).
   spawnChild("mail", process.execPath, [path.join(ROOT, "scripts/mail-sink.mjs")], ROOT, {
     ...buildChildEnv("sink", process.env),

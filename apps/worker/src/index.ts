@@ -127,13 +127,15 @@ if (isMain) {
     : undefined;
 
   let stopping = false;
-  const worker = await startWorker({ databaseUrl, heartbeatIntervalMs });
-  const shutdown = async () => {
-    if (stopping) return;
-    stopping = true;
-    await worker.stop();
-    process.exit(0);
-  };
-  process.on("SIGINT", () => void shutdown());
-  process.on("SIGTERM", () => void shutdown());
+  void (async () => {
+    const worker = await startWorker({ databaseUrl, heartbeatIntervalMs });
+    const shutdown = async () => {
+      if (stopping) return;
+      stopping = true;
+      await worker.stop();
+      process.exit(0);
+    };
+    process.on("SIGINT", () => void shutdown());
+    process.on("SIGTERM", () => void shutdown());
+  })();
 }
