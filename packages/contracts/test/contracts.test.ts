@@ -38,6 +38,7 @@ describe("contracts", () => {
         "unauthenticated",
         "forbidden",
         "email_unverified",
+        "origin_mismatch",
         "not_found",
         "draft_conflict",
         "form_full",

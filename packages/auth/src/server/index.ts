@@ -1,59 +1,157 @@
-/**
- * @form/auth/server — mounting point for the DB-backed Better Auth instance.
- *
- * IMPORT GUARD: this entrypoint may only be imported by the API app
- * (apps/api). It is blocked by:
- *   - `no-restricted-imports` in the web app ESLint config,
- *   - the package-level rule in packages/config/eslint (no package may import
- *     it),
- *   - the web build-time check script (apps/web/scripts/check-imports.mjs).
- *
- * The real Better Auth instance (email/password, verification, reset, session
- * storage in the `auth` Postgres schema) is wired in tickets 02/03. Until then
- * this stub exposes the exact mounting contract the API will use, so the
- * package boundary and import guards exist and are exercised now.
- */
-
-export interface AuthRequestLike {
-  url?: string;
-  headers: { get(name: string): string | null };
-}
-
-export interface AuthResponseLike {
-  status: (code: number) => AuthResponseLike;
-  body: (payload: unknown) => AuthResponseLike;
-}
-
-export type AuthHandler = (
-  request: AuthRequestLike,
-  response: AuthResponseLike,
-) => Promise<void>;
-
-export class AuthNotImplementedError extends Error {
-  constructor() {
-    super(
-      "Better Auth is not wired yet: @form/auth/server is a mounting stub until tickets 02/03.",
-    );
-    this.name = "AuthNotImplementedError";
-  }
-}
+import { betterAuth } from "better-auth";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { drizzle } from "drizzle-orm/node-postgres";
+import type { Pool } from "pg";
+import { uuidv7 } from "@form/database";
+import { t } from "@form/i18n";
+import {
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+} from "../password";
+import { authTables } from "./auth-schema";
+import { resolveEmailProvider } from "./email/resolve";
+import type { EmailProvider } from "./email/types";
 
 /**
- * Returns the handler the API mounts under `/v1/auth/*`. M0 stub: always
- * fails with AuthNotImplementedError. Ticket 03 replaces the body with the
- * real Better Auth handler; the call sites do not change.
+ * The DB-backed Better Auth instance mounted by apps/api under `/v1/auth/*`.
+ *
+ * Ticket 02 spike settings (recorded in docs/adr/0003-topology-spike.md):
+ * - Drizzle adapter over the `auth` Postgres schema (schema qualification
+ *   lives in the `pgSchema("auth")` table definitions — better-auth 1.7.14
+ *   has no string `useSchema` option).
+ * - UUID user IDs: `advanced.database.generateId: () => uuidv7()` (IDs stay
+ *   stored in Better Auth's `text` columns but carry UUIDv7 values, so
+ *   `app.user_id uuid` and every tenant policy compare one representation).
+ *
+ * Ticket 03 (auth core) settings:
+ * - `emailAndPassword.autoSignIn: false` → Better Auth answers a duplicate
+ *   signup with the SAME generic 200 `{ token: null, user }` body as a fresh
+ *   signup (enumeration-safe; it even hashes the password to flatten timing)
+ *   and a fresh signup creates NO session — the user signs in explicitly.
+ * - Password policy 12–128 via the shared constants (packages/auth/password,
+ *   reused by ticket 04's reset flow).
+ * - Verification email goes through the configured `EmailProvider`
+ *   (mail sink locally, Resend HTTPS in deployed environments — never a
+ *   console/log adapter).
+ * - Session: 7-day expiry with daily rolling refresh (Better Auth defaults,
+ *   pinned explicitly), HttpOnly SameSite=Lax cookie, Secure when the origin
+ *   is HTTPS (forced on in production), server-side revocable.
+ * - `trustedOrigins` = APP_ORIGIN; the global Nest Origin guard uses the
+ *   same value (spec: "Better Auth's trusted origins are set to the app
+ *   origin").
  */
-export function createAuthHandler(): AuthHandler {
-  return async () => {
-    throw new AuthNotImplementedError();
+export interface CreateAuthOptions {
+  databaseUrl: string;
+  /** Public web origin (e.g. http://localhost:3000) — also the trusted origin. */
+  appOrigin: string;
+  secret: string;
+  /** Verification-email provider; defaults to `resolveEmailProvider(process.env)`. */
+  emailProvider?: EmailProvider;
+  /** Caller-owned pool (tests close it); default: internal pool from the URL. */
+  pool?: Pool;
+  /** Force the `Secure` cookie attribute (set for NODE_ENV=production). */
+  secureCookies?: boolean;
+}
+
+/** Session lifetime: seven days, refreshed on activity at most once a day. */
+export const SESSION_EXPIRES_IN_SECONDS = 7 * 24 * 60 * 60; // 604800
+export const SESSION_UPDATE_AGE_SECONDS = 24 * 60 * 60; // 86400
+
+export function createAuth(options: CreateAuthOptions) {
+  const emailProvider =
+    options.emailProvider ?? resolveEmailProvider(process.env);
+  return betterAuth({
+    // Runtime schema qualification lives in the pgSchema("auth") tables; the
+    // adapter's `schemaName` option drives the CLI schema generator only.
+    database: drizzleAdapter(drizzle(options.pool ?? options.databaseUrl), {
+      provider: "pg",
+      schema: authTables,
+    }),
+    secret: options.secret,
+    baseURL: options.appOrigin,
+    basePath: "/v1/auth",
+    trustedOrigins: [options.appOrigin],
+    emailAndPassword: {
+      enabled: true,
+      // Enumeration safety + no session on signup (see docblock). NOT
+      // `requireEmailVerification` — unverified users MAY sign in; the
+      // email-unverified boundary is enforced per route by the API guard.
+      autoSignIn: false,
+      minPasswordLength: PASSWORD_MIN_LENGTH,
+      maxPasswordLength: PASSWORD_MAX_LENGTH,
+    },
+    emailVerification: {
+      sendOnSignUp: true,
+      sendVerificationEmail: async ({ user, url }) => {
+        // The subject/body text is resolved from the i18n catalog; the URL
+        // (which contains the verification token) is never logged.
+        await emailProvider.sendVerificationEmail({
+          to: user.email,
+          subject: t("auth.email.verificationSubject"),
+          text: t("auth.email.verificationBody", { name: user.name, url }),
+          url,
+          user: { id: user.id, email: user.email, name: user.name },
+        });
+      },
+    },
+    session: {
+      expiresIn: SESSION_EXPIRES_IN_SECONDS,
+      updateAge: SESSION_UPDATE_AGE_SECONDS,
+      storeSessionInDatabase: true,
+    },
+    advanced: {
+      database: {
+        generateId: () => uuidv7(),
+      },
+      ...(options.secureCookies !== undefined ? { useSecureCookies: options.secureCookies } : {}),
+    },
+    rateLimit: {
+      // The NestJS limiter (trusted-proxy aware) arrives in ticket 04; keep
+      // Better Auth's built-in limiter off so the hop is deterministic.
+      enabled: false,
+    },
+  });
+}
+
+export type Auth = ReturnType<typeof createAuth>;
+
+/** Minimal shape of Better Auth's internal auth context we rely on here. */
+interface AuthInternalContext {
+  internalAdapter: {
+    deleteSession(token: string): Promise<unknown>;
+    findSession(token: string): Promise<{ session: unknown } | null>;
   };
+}
+
+/**
+ * Server-side session revocation (spec: "seven-day rolling expiry and
+ * server-side revocation"). Deletes the session row by token WITHOUT
+ * requiring the holder's cookie — used by moderation/worker flows and the
+ * revocation test. The next request bearing the revoked cookie fails
+ * authentication.
+ */
+export async function revokeSessionByToken(
+  auth: Auth,
+  token: string,
+): Promise<boolean> {
+  const context = (await (auth as unknown as { $context: Promise<AuthInternalContext> }).$context);
+  const existing = await context.internalAdapter.findSession(token);
+  if (!existing) return false;
+  await context.internalAdapter.deleteSession(token);
+  return true;
 }
 
 /** Metadata describing the mount point (used by the API auth module). */
 export const AUTH_MOUNT = {
   /** Path prefix inside the API where Better Auth is mounted. */
   basePath: "/v1/auth",
-  /** Cookie-less allowlist exemptions are defined by the spec, not here. */
-  notes:
-    "Mounted by apps/api under /v1/auth/*; browser reaches it through the same-origin Next.js /v1/* rewrite.",
+  /**
+   * Paths under the mount the API handles in Nest instead of Better Auth
+   * (the mount falls through to `next()` for them).
+   */
+  nestHandledPaths: ["/v1/auth/session"],
 } as const;
+
+/** Email provider port + adapters are part of the server surface. */
+export * from "./email/types";
+export * from "./email/resolve";
