@@ -44,6 +44,13 @@ export {
 } from "./limits";
 export { RateLimitModule } from "./rate-limit.module";
 export {
+  authRateLimitKeys,
+  createAuthRateLimiter,
+  normalizeEmail,
+  type AuthRateLimiterOptions,
+  type MatchedRateLimit,
+} from "./middleware";
+export {
   createRateLimitGuard,
   normalizeEmailForLimit,
   RATE_LIMITED_ROUTES,
