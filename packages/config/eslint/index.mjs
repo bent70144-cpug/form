@@ -54,6 +54,12 @@ export function baseConfig() {
           "warn",
           { prefer: "type-imports" },
         ],
+        // Interface-conformance params are prefixed with `_` (e.g. queue
+        // adapters implementing the port with unused hook arguments).
+        "@typescript-eslint/no-unused-vars": [
+          "error",
+          { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+        ],
         "no-console": "off",
       },
     },

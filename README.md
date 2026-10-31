@@ -15,8 +15,8 @@ request-path package that touches Postgres).
 | `pnpm dev` | one command that starts everything (see below) |
 | `pnpm -w lint` / `pnpm -w typecheck` / `pnpm -w test` | workspace-wide quality gates (CI runs all three) |
 | `pnpm db:start` / `pnpm db:stop` | boot/stop the local PostgreSQL 17 cluster on `127.0.0.1:5433` |
-| `pnpm db:bootstrap` | one-time admin bootstrap (schemas `app`, `auth`, `pgboss` + least-privilege roles) |
-| `pnpm db:migrate` | run SQL migrations as the `migrator` role |
+| `pnpm db:bootstrap` | one-time admin bootstrap (schemas `app`, `auth`, `pgboss` + least-privilege roles `migrator` / `app_user` / `worker_user` / NOLOGIN `fn_owner`, passwords from `MIGRATOR_PASSWORD` / `APP_USER_PASSWORD` / `WORKER_PASSWORD`) |
+| `pnpm db:migrate` | run the 6 SQL migrations as the `migrator` role |
 
 ## Local development without Docker
 
@@ -32,9 +32,14 @@ substitute (see `docs/adr/0001-local-infra-substitutes.md`); the defaults are:
 - **One-time admin bootstrap**, then migrations:
   ```sh
   pnpm db:start        # embedded PostgreSQL 17 on :5433 (superuser postgres)
-  pnpm db:bootstrap    # creates app/auth/pgboss schemas + roles (idempotent)
+  pnpm db:bootstrap    # creates app/auth/pgboss schemas + roles, passwords from env (idempotent)
   pnpm db:migrate      # runs migrations as the migrator role (idempotent)
   ```
+
+  The 6 migrations, in order: `0001_foundation` (extensions/schemas),
+  `0002_workspaces`, `0003_audit_outbox`, `0004_forms`,
+  `0005_sessions_submissions`, `0006_functions` (security-definer
+  functions — the only objects owned by the NOLOGIN `fn_owner`).
 - **Mail sink** instead of Mailpit: `node scripts/mail-sink.mjs` runs a
   dependency-free SMTP server on `127.0.0.1:1025` with a JSON mailbox API at
   `GET http://127.0.0.1:8025/dev/mailbox` (`DELETE` clears it). It is the
