@@ -9,7 +9,7 @@ import {
   problemDetailsSchema,
   problemType,
   sessionResponseSchema,
-  workspaceRefSchema,
+  workspaceSchema,
 } from "../src/index";
 
 describe("contracts", () => {
@@ -60,9 +60,9 @@ describe("contracts", () => {
       name: "Personal Workspace",
       role: "owner",
     };
-    expect(workspaceRefSchema.safeParse(workspace).success).toBe(true);
+    expect(workspaceSchema.safeParse(workspace).success).toBe(true);
     expect(
-      workspaceRefSchema.safeParse({ ...workspace, role: "root" }).success,
+      workspaceSchema.safeParse({ ...workspace, role: "root" }).success,
     ).toBe(false);
 
     // Bootstrap: empty request (caller derived from the session), workspace response.

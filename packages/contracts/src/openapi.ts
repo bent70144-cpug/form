@@ -1,7 +1,12 @@
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { healthResponseSchema } from "./schemas/health";
 import { problemDetailsSchema } from "./schemas/errors";
-import { bootstrapResponseSchema, workspaceSchema } from "./schemas/workspace";
+import {
+  bootstrapRequestSchema,
+  bootstrapResponseSchema,
+  sessionResponseSchema,
+  workspaceSchema,
+} from "./schemas/workspace";
 
 /**
  * OpenAPI 3.1 document generated from the shared Zod contracts (spec: "a
@@ -96,6 +101,37 @@ export function buildOpenApiDocument(): Record<string, unknown> {
             },
             "429": {
               description: "Rate limit exceeded (`rate_limited`)",
+              content: {
+                "application/problem+json": {
+                  schema: zodToJsonSchema(problemDetailsSchema, {
+                    target: "openApi3",
+                  }),
+                },
+              },
+            },
+          },
+        },
+      },
+      "/v1/auth/session": {
+        get: {
+          operationId: "getSession",
+          tags: ["auth"],
+          summary: "Minimal session object",
+          description:
+            "Returns the signed-in user's id, email, verified flag and the active workspace when one exists; 401 with no detail otherwise. Read-only.",
+          responses: {
+            "200": {
+              description: "Session (workspace null until bootstrap)",
+              content: {
+                "application/json": {
+                  schema: zodToJsonSchema(sessionResponseSchema, {
+                    target: "openApi3",
+                  }),
+                },
+              },
+            },
+            "401": {
+              description: "Absent, invalid, expired, or revoked session",
               content: {
                 "application/problem+json": {
                   schema: zodToJsonSchema(problemDetailsSchema, {
