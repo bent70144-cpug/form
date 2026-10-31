@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { t } from "@form/i18n";
 import { getServerSession } from "../../lib/session";
 import SignOutButton from "./SignOutButton";
+import BootstrapWorkspace from "./BootstrapWorkspace";
 import ResendVerificationForm from "../verify-email/ResendVerificationForm";
 
 /**
@@ -17,6 +18,12 @@ import ResendVerificationForm from "../verify-email/ResendVerificationForm";
  * Unverified users DO reach the dashboard here (they may sign in), but every
  * workspace/form/submission API route rejects them with 403
  * `email_unverified` — the shell shows the resend-verification prompt.
+ *
+ * Ticket 05: a verified user whose session has `workspace: null` gets the
+ * small client bootstrap stepper — it POSTs /v1/workspaces/bootstrap from
+ * the BROWSER through the same-origin rewrite, shows "Setting up your
+ * workspace…", then refreshes into the workspace-bearing dashboard. The
+ * server component itself never triggers bootstrap (read-only session GET).
  */
 export default async function DashboardPage() {
   const session = await getServerSession();
@@ -41,8 +48,10 @@ export default async function DashboardPage() {
         >
           <ResendVerificationForm initialEmail={session.email} />
         </section>
-      ) : (
+      ) : session.workspace ? (
         <p>{t("dashboard.placeholderNote")}</p>
+      ) : (
+        <BootstrapWorkspace />
       )}
 
       <p style={{ marginTop: 24 }}>

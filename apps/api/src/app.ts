@@ -4,6 +4,7 @@ import type { NestExpressApplication } from "@nestjs/platform-express";
 import type { Express } from "express";
 import express from "express";
 import type { Pool } from "pg";
+import { createPool } from "@form/database";
 import { createAuth, resolveEmailProvider } from "@form/auth/server";
 import { AppModule } from "./app.module";
 import { hopDiagnostics } from "./health.controller";
@@ -56,9 +57,17 @@ export async function createApiApp(
   rateLimiter: RateLimiter;
   /** The trusted-proxy config used for client-IP derivation. */
   trustedIpConfig: TrustedIpConfig;
+  /** The guarded pooled app_user connection for tenant work (ticket 05). */
+  dbPool: Pool;
 }> {
   const trustedIpConfig: TrustedIpConfig = trustedIpConfigFromValues(env);
   const rateLimiter = new RateLimiter();
+
+  // Tenant pool: DATABASE_URL is the pooled app_user URL (supervisor
+  // allowlist) — never the migrator URL. createPool installs the
+  // tenant-query guard, so tenant tables are reachable only inside the
+  // transaction wrappers' transactions.
+  const dbPool = createPool(env.DATABASE_URL, { max: 10 });
 
   const auth = createAuth({
     databaseUrl: env.DATABASE_URL,
@@ -70,7 +79,7 @@ export async function createApiApp(
   });
 
   const nestApp = await NestFactory.create<NestExpressApplication>(
-    AppModule.withAuth(auth, rateLimiter),
+    AppModule.withAuth(auth, rateLimiter, dbPool),
     {
       logger: env.NODE_ENV === "test" ? false : ["log", "warn", "error"],
     },
@@ -87,5 +96,5 @@ export async function createApiApp(
   expressApp.use(mountBetterAuth(auth));
 
   await nestApp.init();
-  return { nestApp, expressApp, auth, rateLimiter, trustedIpConfig };
+  return { nestApp, expressApp, auth, rateLimiter, trustedIpConfig, dbPool };
 }
