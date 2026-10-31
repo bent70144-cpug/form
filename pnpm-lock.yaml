@@ -154,6 +154,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@form/database':
+        specifier: workspace:*
+        version: link:../../packages/database
       '@form/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -167,9 +170,6 @@ importers:
       '@form/config':
         specifier: workspace:*
         version: link:../../packages/config
-      '@form/database':
-        specifier: workspace:*
-        version: link:../../packages/database
       '@types/node':
         specifier: ^22.10.2
         version: 22.20.5
@@ -318,7 +318,20 @@ importers:
         version: 2.1.9(@types/node@22.20.5)
 
   packages/queue:
+    dependencies:
+      '@form/database':
+        specifier: workspace:*
+        version: link:../database
+      pg:
+        specifier: ^8.13.1
+        version: 8.23.1
+      pg-boss:
+        specifier: 12.38.0
+        version: 12.38.0(@opentelemetry/api@1.10.0)
     devDependencies:
+      '@types/pg':
+        specifier: ^8.11.10
+        version: 8.23.1
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
