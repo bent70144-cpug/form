@@ -33,12 +33,13 @@ afterAll(async () => {
 });
 
 describe("runMigrations", () => {
-  it("applies 0001_foundation.sql once and records it in app.migrations", async () => {
+  it("applies all migration files once and records them in app.migrations", async () => {
     // Migrations always run as the migrator role (never the admin).
     const first = await runMigrations({
       databaseUrl: testRoleUrl("migrator", "t01_migrations_scratch"),
     });
     expect(first.applied).toContain("0001_foundation.sql");
+    expect(first.applied.length).toBeGreaterThanOrEqual(1);
 
     const { Client } = await import("pg");
     const admin = new Client({ connectionString: scratchUrl });
@@ -47,15 +48,19 @@ describe("runMigrations", () => {
       const rows = await admin.query<{ name: string; checksum: string }>(
         "SELECT name, checksum FROM app.migrations",
       );
-      expect(rows.rows.map((r) => r.name)).toEqual(["0001_foundation.sql"]);
-      expect(rows.rows[0]!.checksum).toMatch(/^[0-9a-f]{64}$/);
+      expect(rows.rows.map((r) => r.name)).toEqual(first.applied);
+      expect(rows.rows.map((r) => r.name)).toContain("0001_foundation.sql");
+      for (const row of rows.rows) {
+        expect(row.checksum).toMatch(/^[0-9a-f]{64}$/);
+      }
     } finally {
       await admin.end();
     }
 
     const second = await runMigrations({ databaseUrl: scratchUrl });
     expect(second.applied).toHaveLength(0);
-    expect(second.skipped).toBe(1);
+    // Every file in the migrations directory is tracked and skipped.
+    expect(second.skipped).toBe(first.applied.length);
   });
 
   it("fails loudly when an applied migration file changes (checksum drift)", async () => {
