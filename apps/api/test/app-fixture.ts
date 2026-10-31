@@ -1,6 +1,7 @@
 import { Kysely, PostgresDialect } from "kysely";
 import { Client, Pool } from "pg";
 import { getMigrations } from "better-auth/db/migration";
+import type { EmailProvider } from "@form/auth/server";
 import {
   createScratchDatabase,
   dropDatabase,
@@ -42,6 +43,8 @@ export interface AuthCoreFixture {
 export async function createAuthCoreFixture(
   scratchDb: string,
   overrides: Partial<Record<string, string>> = {},
+  /** Extra createApiApp options (e.g. an explicit emailProvider override). */
+  appOptions: { emailProvider?: EmailProvider } = {},
 ): Promise<AuthCoreFixture> {
   const appName = "http://localhost:3000";
   await createScratchDatabase(scratchDb);
@@ -88,7 +91,7 @@ export async function createAuthCoreFixture(
     SMTP_PORT: String(smtpPort ?? 0),
     ...overrides,
   });
-  const app = await createApiApp(env, { authPool });
+  const app = await createApiApp(env, { authPool, ...appOptions });
 
   const mailboxBase = `http://127.0.0.1:${httpPort ?? 0}/dev/mailbox`;
   return {

@@ -114,6 +114,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@form/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
       '@form/config':
         specifier: workspace:*
         version: link:../../packages/config

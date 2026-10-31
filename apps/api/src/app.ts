@@ -26,7 +26,7 @@ import { loadApiEnv } from "./env";
  */
 export async function createApiApp(
   env = loadApiEnv(),
-  options: { authPool?: Pool } = {},
+  options: { authPool?: Pool; emailProvider?: ReturnType<typeof resolveEmailProvider> } = {},
 ): Promise<{
   nestApp: NestExpressApplication;
   expressApp: Express;
@@ -37,7 +37,7 @@ export async function createApiApp(
     databaseUrl: env.DATABASE_URL,
     appOrigin: env.APP_ORIGIN,
     secret: env.BETTER_AUTH_SECRET,
-    emailProvider: resolveEmailProvider(env),
+    emailProvider: options.emailProvider ?? resolveEmailProvider(env),
     pool: options.authPool,
     secureCookies: env.NODE_ENV === "production",
   });

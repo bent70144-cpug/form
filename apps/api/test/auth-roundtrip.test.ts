@@ -13,6 +13,7 @@ import {
 import { createApiApp } from "../src/app";
 import { loadApiEnv } from "../src/env";
 import { getAuthTablesDdlOwner, AUTH_SCHEMA } from "./helpers";
+import { createMailSink } from "../../../scripts/mail-sink.mjs";
 
 /**
  * Ticket 02 spike — Better Auth mount round-trip against real Postgres:
@@ -37,6 +38,7 @@ let urls: BootstrappedUrls;
 let adminClient: Client;
 let authPool: Pool;
 let expressApp: Awaited<ReturnType<typeof createApiApp>>["expressApp"];
+let sink: ReturnType<typeof createMailSink> | undefined;
 const RUN_EMAIL = `spike-${Date.now()}@example.com`;
 
 beforeAll(async () => {
@@ -72,6 +74,10 @@ beforeAll(async () => {
   }
 
   // 3. Runtime app under the app_user role (pooled URL path of the topology).
+  //    An ephemeral mail sink receives the sign-up verification email (the
+  //    fixed dev sink on 1025 is NOT running in CI/test runs).
+  sink = createMailSink({ smtpPort: 0, httpPort: 0 });
+  const sinkPorts = await sink.start();
   authPool = new Pool({ connectionString: urls.appUserUrl, max: 5 });
   const app = await createApiApp(
     loadApiEnv({
@@ -81,7 +87,7 @@ beforeAll(async () => {
       BETTER_AUTH_SECRET: "spike-test-secret-0123456789",
       NODE_ENV: "test",
       SMTP_HOST: "127.0.0.1",
-      SMTP_PORT: "1025",
+      SMTP_PORT: String(sinkPorts.smtpPort ?? 0),
     }),
     { authPool },
   );
@@ -89,6 +95,7 @@ beforeAll(async () => {
 }, 120_000);
 
 afterAll(async () => {
+  await sink?.stop().catch(() => undefined);
   await authPool?.end().catch(() => undefined);
   await adminClient?.end();
   await dropDatabase(SCRATCH_DB);

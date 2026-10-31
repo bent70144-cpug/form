@@ -129,7 +129,6 @@ describe("signup → verification email → verify → sign-in → session → s
 
   it("signs in with the session cookie HttpOnly + SameSite=Lax and 7-day expiry", async () => {
     const res = await signIn(email, password);
-    console.log("DBG SIGNIN", res.status, JSON.stringify(res.body).slice(0, 200), "SC:", JSON.stringify(res.headers["set-cookie"]));
     expect(res.status).toBe(200);
     const setCookie = res.headers["set-cookie"] as unknown as string[];
     const sessionCookie = setCookie.find((c) => c.startsWith("better-auth.session_token="));
@@ -449,5 +448,65 @@ describe("SSR-vs-browser session validation paths", () => {
     const res = await request(app).get("/v1/auth/session");
     expect(res.status).toBe(401);
     expect(res.text).toBe("");
+  });
+});
+
+describe("cookie hardening — Secure in production (env simulation)", () => {
+  let prodFx: AuthCoreFixture;
+  let prodApp: Express;
+
+  beforeAll(async () => {
+    // Simulate the deployed environment: NODE_ENV=production forces the
+    // `Secure` cookie attribute (apps/api passes secureCookies to
+    // @form/auth/server). The email provider is pinned to a standalone sink
+    // because production would otherwise resolve to Resend (no credentials
+    // in the sandbox) — no email is actually needed for a sign-in.
+    const { createMailSink } = await import("../../../scripts/mail-sink.mjs");
+    const standalone = createMailSink({ smtpPort: 0, httpPort: 0 });
+    const ports = await standalone.start();
+    const { MailSinkEmailProvider } = await import("@form/auth/server");
+    prodFx = await createAuthCoreFixture(
+      "t03_auth_prod",
+      { NODE_ENV: "production" },
+      { emailProvider: new MailSinkEmailProvider({ port: ports.smtpPort }) },
+    );
+    prodApp = prodFx.expressApp;
+  }, 120_000);
+
+  afterAll(async () => {
+    await prodFx.close();
+  });
+
+  it("production sessions Set-Cookie carry HttpOnly, SameSite=Lax AND Secure", async () => {
+    const email = `prod-secure-${Date.now()}@example.com`;
+    const password = "password-12-chars-min";
+    const signUpRes = await request(prodApp)
+      .post("/v1/auth/sign-up/email")
+      .set("Origin", prodFx.appName)
+      .send({ name: "Prod", email, password });
+    expect(signUpRes.status).toBe(200);
+
+    const res = await request(prodApp)
+      .post("/v1/auth/sign-in/email")
+      .set("Origin", prodFx.appName)
+      .send({ email, password });
+    expect(res.status).toBe(200);
+    const setCookie = res.headers["set-cookie"] as unknown as string[];
+    // With useSecureCookies, Better Auth adds the __Secure- cookie prefix.
+    const sessionCookie = setCookie.find((c) =>
+      c.startsWith("__Secure-better-auth.session_token="),
+    );
+    expect(sessionCookie).toBeDefined();
+    expect(sessionCookie).toContain("HttpOnly");
+    expect(sessionCookie).toMatch(/SameSite=Lax/i);
+    expect(sessionCookie).toMatch(/;\s*Secure/i); // ← the production delta
+    // 7-day maxAge holds in production too.
+    const days =
+      Number(sessionCookie?.match(/Max-Age=(\d+)/)?.[1] ?? 0) / 86_400 ||
+      (new Date(sessionCookie?.match(/Expires=([^;]+)/)?.[1] ?? "").getTime() -
+        Date.now()) /
+        86_400_000;
+    expect(days).toBeGreaterThan(6.9);
+    expect(days).toBeLessThan(7.1);
   });
 });

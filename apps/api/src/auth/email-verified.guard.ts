@@ -1,11 +1,10 @@
 import {
-  CanActivate,
-  ExecutionContext,
   Injectable,
   SetMetadata,
   createParamDecorator,
   Inject,
 } from "@nestjs/common";
+import type { CanActivate, ExecutionContext } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import type { Response } from "express";
 import type { Auth } from "@form/auth/server";

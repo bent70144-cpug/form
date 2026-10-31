@@ -63,8 +63,8 @@ describe("@form/auth/client", () => {
     const session = await client.getSession("sid=abc");
     expect(session?.userId).toBe("u1");
     expect(session?.workspace).toBeNull();
-    expect(calls[0].url).toBe("http://127.0.0.1:4000/v1/auth/session");
-    expect((calls[0].init.headers as Record<string, string>)["cookie"]).toBe(
+    expect(calls[0]?.url).toBe("http://127.0.0.1:4000/v1/auth/session");
+    expect((calls[0]?.init.headers as Record<string, string> | undefined)?.["cookie"]).toBe(
       "sid=abc",
     );
   });
@@ -85,8 +85,10 @@ describe("@form/auth/client", () => {
     }) as unknown as typeof fetch;
     const client = createSessionClient({ fetchImpl });
     await client.getSession();
-    expect(calls[0].url).toBe("/v1/auth/session");
-    expect((calls[0].init.headers as Record<string, string>)["cookie"]).toBeUndefined();
+    expect(calls[0]?.url).toBe("/v1/auth/session");
+    expect(
+      (calls[0]?.init.headers as Record<string, string> | undefined)?.["cookie"],
+    ).toBeUndefined();
   });
 
   it("returns null on 401 instead of throwing", async () => {
@@ -183,10 +185,10 @@ describe("email providers", () => {
       url: "http://x/v1/auth/verify-email?token=t",
       user: { id: "u1", email: "user@example.com", name: "U" },
     });
-    expect(bodies[0].url).toBe("https://api.resend.com/emails");
-    const headers = bodies[0].init.headers as Record<string, string>;
+    expect(bodies[0]?.url).toBe("https://api.resend.com/emails");
+    const headers = bodies[0]?.init.headers as Record<string, string>;
     expect(headers["authorization"]).toBe("Bearer re_test_key");
-    const payload = JSON.parse(String(bodies[0].init.body)) as {
+    const payload = JSON.parse(String(bodies[0]?.init.body)) as {
       from: string;
       to: string[];
       text: string;
