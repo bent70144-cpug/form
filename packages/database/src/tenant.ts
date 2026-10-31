@@ -46,6 +46,30 @@ export interface AdminDb {
   drizzle: FormDrizzle;
 }
 
+/**
+ * Handle for the NARROW bootstrap context (ticket 05): a transaction with
+ * ONLY `app.user_id` set — no workspace yet, so RLS hides every tenant row
+ * and the only sanctioned writes go through security-definer functions
+ * (`create_personal_workspace()`), which set `app.workspace_id`
+ * transaction-locally themselves. `withWorkspace(workspaceId)` widens the
+ * SAME transaction into a full `TenantDb` after a workspace has been
+ * resolved (e.g. via `list_workspaces()`).
+ */
+export interface UserDb {
+  query<R extends QueryResultRow = QueryResultRow>(
+    text: string,
+    values?: unknown[],
+  ): Promise<QueryResult<R>>;
+  /** Drizzle instance bound to the transaction client. */
+  drizzle: FormDrizzle;
+  userId: string;
+  /**
+   * Sets `app.workspace_id` transaction-locally (`set_config(..., true)`) and
+   * returns the tenant-scoped handle for the remainder of the transaction.
+   */
+  withWorkspace(workspaceId: string): Promise<TenantDb>;
+}
+
 function assertUuid(value: string, name: string): void {
   if (!isUuid(value)) {
     throw new Error(
@@ -75,6 +99,57 @@ export async function withTenantTransaction<T>(
       query: (text, values) => client.query(text, values),
       drizzle: drizzle(client) as unknown as FormDrizzle,
       context,
+    };
+    let result: T;
+    try {
+      result = await fn(tx);
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    }
+    await client.query("COMMIT");
+    return result;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Narrow user-context transaction (ticket 05 bootstrap path): opens a
+ * transaction, sets ONLY `app.user_id` transaction-locally, and hands the
+ * callback a `UserDb`. The tenant-query guard is armed for the whole
+ * transaction; until `withWorkspace()` is called RLS still hides every
+ * tenant row (no `app.workspace_id`), so the narrow context can only act
+ * through security-definer functions.
+ */
+export async function withUserTransaction<T>(
+  pool: Pool,
+  userId: string,
+  fn: (tx: UserDb) => Promise<T>,
+): Promise<T> {
+  assertUuid(userId, "userId");
+
+  const client = await pool.connect();
+  markTenantTransactionClient(client);
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT set_config('app.user_id', $1, true)", [userId]);
+    const tx: UserDb = {
+      query: (text, values) => client.query(text, values),
+      drizzle: drizzle(client) as unknown as FormDrizzle,
+      userId,
+      withWorkspace: async (workspaceId: string): Promise<TenantDb> => {
+        assertUuid(workspaceId, "workspaceId");
+        await client.query(
+          "SELECT set_config('app.workspace_id', $1, true)",
+          [workspaceId],
+        );
+        return {
+          query: (text, values) => client.query(text, values),
+          drizzle: tx.drizzle,
+          context: { userId, workspaceId },
+        };
+      },
     };
     let result: T;
     try {
