@@ -1,4 +1,20 @@
 import { PgBoss } from "pg-boss";
+import {
+  createOutboxDispatcher,
+  intervalCron,
+  DEFAULT_DISPATCH_INTERVAL_MS,
+  type OutboxDispatcher,
+} from "./outbox/dispatcher";
+import { defaultOutboxHandlers } from "./outbox/handlers";
+
+export {
+  DEFAULT_DISPATCH_INTERVAL_MS,
+  DEFAULT_MAX_ATTEMPTS,
+  intervalCron,
+} from "./outbox/dispatcher";
+
+/** Alias kept for the ticket-02 heartbeat tests/ADR references. */
+export const heartbeatCron = intervalCron;
 
 /**
  * Worker process (ticket 02 spike): owns the pg-boss heartbeat.
@@ -18,6 +34,8 @@ export interface WorkerOptions {
   databaseUrl: string;
   /** Heartbeat cadence in milliseconds (default 30_000). */
   heartbeatIntervalMs?: number;
+  /** Outbox dispatch cadence in milliseconds (default 30_000, ADR-0003). */
+  outboxDispatchIntervalMs?: number;
   /** Test hook: receive every heartbeat log line. */
   onHeartbeat?: (line: Record<string, unknown>) => void;
 }
@@ -25,18 +43,11 @@ export interface WorkerOptions {
 export const DEFAULT_HEARTBEAT_INTERVAL_MS = 30_000;
 
 /**
- * Recurring schedule expression for a cadence in milliseconds. pg-boss 12
- * accepts cron expressions and RFC 5545 recurrence rules: 6-field cron with a
- * seconds field works for divisors of 60s; anything else uses RRULE
- * FREQ=SECONDLY (both verified via previewSchedule in the spike).
+ * Recurring schedule expression for a cadence in milliseconds (moved to
+ * outbox/dispatcher.ts as `intervalCron`; re-exported above as
+ * `heartbeatCron` — pg-boss 12 accepts cron expressions and RFC 5545
+ * recurrence rules, both verified via previewSchedule in the spike).
  */
-export function heartbeatCron(intervalMs: number): string {
-  const seconds = Math.max(1, Math.round(intervalMs / 1000));
-  if (60 % seconds === 0) {
-    return `*/${seconds} * * * * *`;
-  }
-  return `FREQ=SECONDLY;INTERVAL=${seconds}`;
-}
 
 /** Installs the pg-boss schema DDL as the migrator (dev/test companion step; production = migration).
  *
@@ -106,16 +117,37 @@ export async function startWorker(options: WorkerOptions) {
   await boss.schedule("heartbeat", heartbeatCron(heartbeatIntervalMs), {
     sequence: 0,
   });
+
+  // Outbox dispatcher (ticket 05): a second pg-boss schedule on the same
+  // direct connection drains app.outbox_events (claims with FOR UPDATE SKIP
+  // LOCKED under worker_user, retries with backoff, dead-letters after 10
+  // attempts). Default cadence 30 s per ADR-0003.
+  const outboxDispatcher = await createOutboxDispatcher({
+    boss,
+    workerDatabaseUrl: options.databaseUrl,
+    handlers: defaultOutboxHandlers(),
+    dispatchIntervalMs: options.outboxDispatchIntervalMs,
+    logger: {
+      info: (obj: Record<string, unknown>, msg: string) => process.stdout.write(JSON.stringify({ ...obj, msg }) + "\n"),
+      warn: (obj: Record<string, unknown>, msg: string) => process.stderr.write(JSON.stringify({ ...obj, msg }) + "\n"),
+    },
+  });
+  await outboxDispatcher.start();
+
   process.stdout.write(
     JSON.stringify({
       event: "worker.started",
       heartbeatIntervalMs,
       cron: heartbeatCron(heartbeatIntervalMs),
+      outboxCron: intervalCron(
+        options.outboxDispatchIntervalMs ?? DEFAULT_DISPATCH_INTERVAL_MS,
+      ),
     }) + "\n",
   );
 
   return {
     async stop() {
+      await outboxDispatcher.stop();
       await boss.offWork("heartbeat");
       await boss.stop({ graceful: false, timeout: 2000 });
     },

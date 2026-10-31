@@ -14,6 +14,7 @@
  */
 export {
   createPool,
+  markTenantTransactionClient,
   TenantQueryOutsideTransactionError,
   type CreatePoolOptions,
 } from "./pool";
