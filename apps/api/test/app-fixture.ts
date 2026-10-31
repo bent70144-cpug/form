@@ -35,6 +35,8 @@ export interface AuthCoreFixture {
   auth: Awaited<ReturnType<typeof createApiApp>>["auth"];
   /** The app's process-wide limiter (rate-limit suites drive it via HTTP). */
   rateLimiter: Awaited<ReturnType<typeof createApiApp>>["rateLimiter"];
+  /** The guarded pooled app_user tenant connection (ticket 05 workspaces). */
+  dbPool: Awaited<ReturnType<typeof createApiApp>>["dbPool"];
   /** Reads the sink mailbox over its HTTP API (GET /dev/mailbox). */
   mailbox(): Promise<{ messages: Array<{ id: number; to: string[]; raw: string }> }>;
   /** Clears the sink mailbox (DELETE /dev/mailbox). */
@@ -119,6 +121,7 @@ export async function createAuthCoreFixture(
     expressApp: app.expressApp,
     auth: app.auth,
     rateLimiter: app.rateLimiter,
+    dbPool: app.dbPool,
     async mailbox() {
       const res = await fetch(mailboxBase);
       if (!res.ok) throw new Error(`mailbox read failed: ${res.status}`);
@@ -130,6 +133,7 @@ export async function createAuthCoreFixture(
     async close() {
       await sink.stop().catch(() => undefined);
       await authPool.end().catch(() => undefined);
+      await app.dbPool.end().catch(() => undefined);
       await adminClient.end();
       await dropDatabase(scratchDb);
     },

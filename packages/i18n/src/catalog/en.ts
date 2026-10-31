@@ -28,6 +28,9 @@ export const en = {
     title: "Dashboard",
     placeholderNote:
       "The M0 dashboard is a placeholder. Workspaces and forms arrive in the next slices.",
+    settingUpWorkspace: "Setting up your workspace…",
+    bootstrapFailed:
+      "Setting up your workspace failed. Reload the page to try again.",
     signedInAs: "Signed in as {email}",
     signOut: "Sign out",
   },
@@ -123,6 +126,11 @@ export const en = {
     originMismatch: {
       title: "Origin check failed",
       detail: "Requests that change state must come from the application origin.",
+    },
+    workspaceSetup: {
+      title: "Workspace not set up",
+      detail:
+        "No active workspace yet. Call POST /v1/workspaces/bootstrap to create your personal workspace.",
     },
   },
 } as const;
