@@ -68,6 +68,13 @@ export async function startWorker(options: WorkerOptions) {
     // DML-only, so it MUST NOT run migrations.
     migrate: false,
     createSchema: false,
+    // pg-boss 12.38 defaults: cronMonitorIntervalSeconds=30 (allowed 1..45),
+    // cronWorkerIntervalSeconds=5. A schedule created after start() would not
+    // produce its first job for up to 30s+5s — spike finding: the heartbeat
+    // test (15s deadline) missed it. A 5s monitor bounds dispatch latency to
+    // roughly interval + 10s without meaningful extra load on Neon.
+    cronMonitorIntervalSeconds: 5,
+    cronWorkerIntervalSeconds: 5,
   });
 
   boss.on("error", (error) => {

@@ -1,11 +1,13 @@
+import type { NextConfig } from "next";
+
 /**
  * apps/web — Next.js public deployable (ticket 02 alpha topology spike).
  *
  * The web process is deliberately dumb: it renders the dashboard/public pages
  * and same-origin-proxies `/v1/*` to the NestJS API. It receives NO database
  * URL and NO auth secret (supervisor allowlist — packages/config supervisor
- * test). The only server-side variable it needs is API_INTERNAL_URL, the
- * internal (non-public) base URL of the NestJS process.
+ * test). The only server-side variables it needs are API_INTERNAL_URL (full
+ * internal base URL) or API_INTERNAL_PORT (port on 127.0.0.1).
  *
  * Hop chain (recorded in docs/adr/0003-topology-spike.md):
  *   browser → Next.js rewrite `/v1/:path*` → NestJS `http://127.0.0.1:$API_PORT/v1/:path*`
@@ -16,17 +18,24 @@
  */
 
 /**
- * Build the rewrite list from the internal API base URL. Exported so the
+ * Build the rewrite list from the internal API coordinates. Precedence:
+ * API_INTERNAL_URL → API_INTERNAL_PORT → the documented default 4000
+ * (i.e. `http://127.0.0.1:${API_INTERNAL_PORT:-4000}`). Exported so the
  * config-level test (packages/config/test/web-rewrite.test.mjs) can assert
  * the exact hop without booting Next.
  */
-export function buildRewrites(apiInternalUrl = process.env.API_INTERNAL_URL ?? "http://127.0.0.1:4000") {
-  const base = apiInternalUrl.replace(/\/$/, "");
+export function buildRewrites(
+  apiInternalUrl: string | undefined = process.env.API_INTERNAL_URL,
+  apiInternalPort: string | undefined = process.env.API_INTERNAL_PORT,
+): Array<{ source: string; destination: string }> {
+  const base = (apiInternalUrl ?? `http://127.0.0.1:${apiInternalPort ?? 4000}`).replace(
+    /\/$/,
+    "",
+  );
   return [{ source: "/v1/:path*", destination: `${base}/v1/:path*` }];
 }
 
-/** @type {import('next').NextConfig} */
-const nextConfig = {
+const nextConfig: NextConfig = {
   reactStrictMode: true,
   async rewrites() {
     return buildRewrites();
