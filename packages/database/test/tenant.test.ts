@@ -4,6 +4,7 @@ import {
   TenantQueryOutsideTransactionError,
   withAdminTransaction,
   withTenantTransaction,
+  withUserTransaction,
 } from "../src";
 import {
   ensureBootstrapped,
@@ -135,6 +136,52 @@ describe("withTenantTransaction", () => {
           async () => undefined,
         ),
       ).rejects.toThrow(/userId must be a UUID/);
+    } finally {
+      await pool.end();
+    }
+  });
+});
+
+describe("withUserTransaction", () => {
+  it("sets ONLY app.user_id; withWorkspace() widens to a tenant handle transaction-locally", async () => {
+    const pool = createPool(appUserUrl, { max: 1 });
+    try {
+      await withUserTransaction(pool, USER_ID, async (tx) => {
+        const narrow = await tx.query<{ uid: string | null; wid: string | null }>(
+          `SELECT current_setting('app.user_id', true) AS uid,
+                  current_setting('app.workspace_id', true) AS wid`,
+        );
+        expect(narrow.rows[0]!.uid).toBe(USER_ID);
+        expect(narrow.rows[0]!.wid === "" || narrow.rows[0]!.wid === null).toBe(true);
+
+        const tenant = await tx.withWorkspace(WS_ID);
+        expect(tenant.context).toEqual({ userId: USER_ID, workspaceId: WS_ID });
+        const widened = await tenant.query<{ wid: string | null }>(
+          "SELECT current_setting('app.workspace_id', true) AS wid",
+        );
+        expect(widened.rows[0]!.wid).toBe(WS_ID);
+      });
+      // Transaction-local: nothing survives COMMIT.
+      const after = await pool.query<{ wid: string | null }>(
+        "SELECT current_setting('app.workspace_id', true) AS wid",
+      );
+      expect(after.rows[0]!.wid === "" || after.rows[0]!.wid === null).toBe(true);
+    } finally {
+      await pool.end();
+    }
+  });
+
+  it("rejects non-UUID values for the user and the widened workspace", async () => {
+    const pool = createPool(appUserUrl, { max: 1 });
+    try {
+      await expect(
+        withUserTransaction(pool, "nope", async () => undefined),
+      ).rejects.toThrow(/userId must be a UUID/);
+      await withUserTransaction(pool, USER_ID, async (tx) => {
+        await expect(tx.withWorkspace("nope")).rejects.toThrow(
+          /workspaceId must be a UUID/,
+        );
+      });
     } finally {
       await pool.end();
     }

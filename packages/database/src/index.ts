@@ -14,14 +14,17 @@
  */
 export {
   createPool,
+  markTenantTransactionClient,
   TenantQueryOutsideTransactionError,
   type CreatePoolOptions,
 } from "./pool";
 export {
   withTenantTransaction,
+  withUserTransaction,
   withAdminTransaction,
   type TenantContext,
   type TenantDb,
+  type UserDb,
   type AdminDb,
   type FormDrizzle,
 } from "./tenant";

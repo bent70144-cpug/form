@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   ErrorCodes,
+  bootstrapRequestSchema,
+  bootstrapResponseSchema,
   buildOpenApiDocument,
   fieldErrorSchema,
   healthResponseSchema,
   problemDetailsSchema,
   problemType,
+  sessionResponseSchema,
+  workspaceRefSchema,
 } from "../src/index";
 
 describe("contracts", () => {
@@ -50,6 +54,44 @@ describe("contracts", () => {
       ].sort(),
     );
   });
+  it("validates the workspace bootstrap and session contracts (ticket 05)", () => {
+    const workspace = {
+      id: "018f0b2e-6f7a-7c3e-9a1b-2c3d4e5f6a7b",
+      name: "Personal Workspace",
+      role: "owner",
+    };
+    expect(workspaceRefSchema.safeParse(workspace).success).toBe(true);
+    expect(
+      workspaceRefSchema.safeParse({ ...workspace, role: "root" }).success,
+    ).toBe(false);
+
+    // Bootstrap: empty request (caller derived from the session), workspace response.
+    expect(bootstrapRequestSchema.safeParse({}).success).toBe(true);
+    expect(bootstrapRequestSchema.safeParse({ workspaceId: "x" }).success).toBe(
+      false,
+    );
+    expect(
+      bootstrapResponseSchema.safeParse({ workspace }).success,
+    ).toBe(true);
+
+    // Session: workspace null before bootstrap, ref after.
+    expect(
+      sessionResponseSchema.safeParse({
+        userId: "u1",
+        email: "u@example.com",
+        emailVerified: true,
+        workspace: null,
+      }).success,
+    ).toBe(true);
+    expect(
+      sessionResponseSchema.safeParse({
+        userId: "u1",
+        email: "u@example.com",
+        emailVerified: true,
+        workspace,
+      }).success,
+    ).toBe(true);
+  });
 });
 
 describe("openapi document", () => {
@@ -70,5 +112,15 @@ describe("openapi document", () => {
     expect(
       get.get.responses["200"]?.content["application/json"],
     ).toBeTruthy();
+  });
+
+  it("exposes /v1/auth/session and /v1/workspaces/bootstrap (ticket 05)", () => {
+    const doc = buildOpenApiDocument() as {
+      paths: Record<string, Record<string, { operationId?: string }>>;
+    };
+    expect(doc.paths["/v1/auth/session"]?.get?.operationId).toBe("getSession");
+    expect(
+      doc.paths["/v1/workspaces/bootstrap"]?.post?.operationId,
+    ).toBe("bootstrapWorkspace");
   });
 });

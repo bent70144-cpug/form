@@ -32,6 +32,15 @@ export const en = {
     bootstrapFailed:
       "Setting up your workspace failed. Reload the page to try again.",
     signedInAs: "Signed in as {email}",
+    workspace: {
+      label: "Workspace",
+    },
+    bootstrap: {
+      settingUp: "Setting up your workspace…",
+      failed:
+        "Setting up your workspace failed. Please try again.",
+      retry: "Retry",
+    },
     signOut: "Sign out",
   },
   auth: {
