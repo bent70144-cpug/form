@@ -11,12 +11,19 @@ import {
   type BootstrappedUrls,
 } from "@form/database/testing";
 import { createApiApp } from "../src/app";
+import { loadApiEnv } from "../src/env";
 import { getAuthTablesDdlOwner, AUTH_SCHEMA } from "./helpers";
+import { createMailSink } from "../../../scripts/mail-sink.mjs";
 
 /**
  * Ticket 02 spike — Better Auth mount round-trip against real Postgres:
- * sign-up → Set-Cookie → session fetch, all through the NestJS mount at
- * `/v1/auth/*` with Better Auth tables living in the non-public `auth` schema.
+ * sign-up → sign-in → Set-Cookie → session fetch, all through the NestJS
+ * mount at `/v1/auth/*` with Better Auth tables living in the non-public
+ * `auth` schema.
+ *
+ * Ticket 03 note: sign-up no longer creates a session (enumeration-safe
+ * duplicate handling + explicit sign-in); the round trip now signs in before
+ * fetching the session. Full auth-core coverage lives in auth-core.test.ts.
  *
  * The `auth` schema tables are created by Better Auth itself (its compiled
  * Kysely DDL, executed here as the ADMIN as a migrator-adjacent test step).
@@ -31,6 +38,7 @@ let urls: BootstrappedUrls;
 let adminClient: Client;
 let authPool: Pool;
 let expressApp: Awaited<ReturnType<typeof createApiApp>>["expressApp"];
+let sink: ReturnType<typeof createMailSink> | undefined;
 const RUN_EMAIL = `spike-${Date.now()}@example.com`;
 
 beforeAll(async () => {
@@ -66,21 +74,28 @@ beforeAll(async () => {
   }
 
   // 3. Runtime app under the app_user role (pooled URL path of the topology).
+  //    An ephemeral mail sink receives the sign-up verification email (the
+  //    fixed dev sink on 1025 is NOT running in CI/test runs).
+  sink = createMailSink({ smtpPort: 0, httpPort: 0 });
+  const sinkPorts = await sink.start();
   authPool = new Pool({ connectionString: urls.appUserUrl, max: 5 });
   const app = await createApiApp(
-    {
-      PORT: 4000,
+    loadApiEnv({
+      PORT: "4000",
       DATABASE_URL: urls.appUserUrl,
       APP_ORIGIN,
       BETTER_AUTH_SECRET: "spike-test-secret-0123456789",
       NODE_ENV: "test",
-    },
+      SMTP_HOST: "127.0.0.1",
+      SMTP_PORT: String(sinkPorts.smtpPort ?? 0),
+    }),
     { authPool },
   );
   expressApp = app.expressApp;
 }, 120_000);
 
 afterAll(async () => {
+  await sink?.stop().catch(() => undefined);
   await authPool?.end().catch(() => undefined);
   await adminClient?.end();
   await dropDatabase(SCRATCH_DB);
@@ -98,22 +113,24 @@ describe("Better Auth mounted under /v1/auth (NestJS)", () => {
     expect(res.rows.every((r) => r.table_owner === "migrator" || r.table_owner === "postgres")).toBe(true);
   });
 
-  it("completes a sign-up → Set-Cookie → session round trip", async () => {
+  it("completes a sign-up → sign-in → Set-Cookie → session round trip", async () => {
     const signUp = await request(expressApp)
       .post("/v1/auth/sign-up/email")
       .set("Origin", APP_ORIGIN)
       .send({ name: "Spike User", email: RUN_EMAIL, password: "spike-password-123" });
     expect(signUp.status).toBe(200);
+    // Enumeration-safe signup creates NO session cookie (sign-in is explicit).
+    expect(signUp.headers["set-cookie"]).toBeUndefined();
 
-    const setCookie = signUp.headers["set-cookie"];
+    const signIn = await request(expressApp)
+      .post("/v1/auth/sign-in/email")
+      .set("Origin", APP_ORIGIN)
+      .send({ email: RUN_EMAIL, password: "spike-password-123" });
+    expect(signIn.status).toBe(200);
+    const setCookie = signIn.headers["set-cookie"];
     expect(setCookie).toBeDefined();
     const cookie = (setCookie as unknown as string[]).map((c) => c.split(";")[0]).join("; ");
     expect(cookie).toContain("better-auth.session_token=");
-
-    const body = signUp.body as { user?: { id: string; email: string } };
-    expect(body.user?.email).toBe(RUN_EMAIL);
-    // UUID decision (ADR 0002/0003): user IDs are UUIDs via generateId.
-    expect(isUuid(body.user!.id)).toBe(true);
 
     const session = await request(expressApp)
       .get("/v1/auth/get-session")
@@ -121,8 +138,33 @@ describe("Better Auth mounted under /v1/auth (NestJS)", () => {
     expect(session.status).toBe(200);
     const sessionBody = session.body as { user: { id: string; email: string }; session: unknown };
     expect(sessionBody.user.email).toBe(RUN_EMAIL);
-    expect(sessionBody.user.id).toBe(body.user!.id);
+    // UUID decision (ADR 0002/0003): user IDs are UUIDs via generateId.
+    expect(isUuid(sessionBody.user.id)).toBe(true);
     expect(sessionBody.session).toBeTruthy();
+  });
+
+  it("serves the minimal Nest session endpoint for a signed-in session", async () => {
+    const signIn = await request(expressApp)
+      .post("/v1/auth/sign-in/email")
+      .set("Origin", APP_ORIGIN)
+      .send({ email: RUN_EMAIL, password: "spike-password-123" });
+    const cookie = (signIn.headers["set-cookie"] as unknown as string[])
+      .map((c) => c.split(";")[0])
+      .join("; ");
+    const res = await request(expressApp).get("/v1/auth/session").set("Cookie", cookie);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      userId: expect.any(String),
+      email: RUN_EMAIL,
+      emailVerified: false,
+      workspace: null,
+    });
+    // Unverified user on a guarded route → 403 email_unverified (probe route).
+    const probe = await request(expressApp)
+      .get("/v1/probe/verified")
+      .set("Cookie", cookie);
+    expect(probe.status).toBe(403);
+    expect(probe.body).toMatchObject({ code: "email_unverified", status: 403 });
   });
 
   it("records what Nest sees as the peer address and forwarded headers (spike hop)", async () => {
