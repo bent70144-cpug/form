@@ -4,6 +4,44 @@ exports[`openapi document > matches the committed snapshot 1`] = `
 {
   "components": {
     "schemas": {
+      "BootstrapResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "workspace": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "format": "uuid",
+                "type": "string",
+              },
+              "name": {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string",
+              },
+              "role": {
+                "enum": [
+                  "owner",
+                  "admin",
+                  "editor",
+                  "viewer",
+                ],
+                "type": "string",
+              },
+            },
+            "required": [
+              "id",
+              "name",
+              "role",
+            ],
+            "type": "object",
+          },
+        },
+        "required": [
+          "workspace",
+        ],
+        "type": "object",
+      },
       "HealthResponse": {
         "additionalProperties": false,
         "properties": {
@@ -73,6 +111,86 @@ exports[`openapi document > matches the committed snapshot 1`] = `
         ],
         "type": "object",
       },
+      "SessionResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "type": "string",
+          },
+          "emailVerified": {
+            "type": "boolean",
+          },
+          "userId": {
+            "type": "string",
+          },
+          "workspace": {
+            "additionalProperties": false,
+            "nullable": true,
+            "properties": {
+              "id": {
+                "format": "uuid",
+                "type": "string",
+              },
+              "name": {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string",
+              },
+              "role": {
+                "enum": [
+                  "owner",
+                  "admin",
+                  "editor",
+                  "viewer",
+                ],
+                "type": "string",
+              },
+            },
+            "required": [
+              "id",
+              "name",
+              "role",
+            ],
+            "type": "object",
+          },
+        },
+        "required": [
+          "userId",
+          "email",
+          "emailVerified",
+          "workspace",
+        ],
+        "type": "object",
+      },
+      "WorkspaceRef": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string",
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string",
+          },
+          "role": {
+            "enum": [
+              "owner",
+              "admin",
+              "editor",
+              "viewer",
+            ],
+            "type": "string",
+          },
+        },
+        "required": [
+          "id",
+          "name",
+          "role",
+        ],
+        "type": "object",
+      },
     },
   },
   "info": {
@@ -82,6 +200,78 @@ exports[`openapi document > matches the committed snapshot 1`] = `
   },
   "openapi": "3.1.0",
   "paths": {
+    "/v1/auth/session": {
+      "get": {
+        "operationId": "getSession",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "email": {
+                      "type": "string",
+                    },
+                    "emailVerified": {
+                      "type": "boolean",
+                    },
+                    "userId": {
+                      "type": "string",
+                    },
+                    "workspace": {
+                      "additionalProperties": false,
+                      "nullable": true,
+                      "properties": {
+                        "id": {
+                          "format": "uuid",
+                          "type": "string",
+                        },
+                        "name": {
+                          "maxLength": 200,
+                          "minLength": 1,
+                          "type": "string",
+                        },
+                        "role": {
+                          "enum": [
+                            "owner",
+                            "admin",
+                            "editor",
+                            "viewer",
+                          ],
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "role",
+                      ],
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "userId",
+                    "email",
+                    "emailVerified",
+                    "workspace",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Signed-in session; \`workspace\` is null until bootstrap",
+          },
+          "401": {
+            "description": "Absent, invalid, expired, or revoked session (empty body)",
+          },
+        },
+        "summary": "Minimal read-only session (workspace null until bootstrap; never writes)",
+        "tags": [
+          "auth",
+        ],
+      },
+    },
     "/v1/health": {
       "get": {
         "operationId": "getHealth",
@@ -197,6 +387,189 @@ exports[`openapi document > matches the committed snapshot 1`] = `
         ],
       },
     },
+    "/v1/workspaces/bootstrap": {
+      "post": {
+        "description": "Runs with ONLY \`app.user_id\` set (narrow request context) and calls the security-definer \`create_personal_workspace()\`. Repeated calls return the existing workspace and create no duplicates. Requires a verified email and the same-origin Origin header.",
+        "operationId": "bootstrapWorkspace",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {},
+                "type": "object",
+              },
+            },
+          },
+          "required": false,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "workspace": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "format": "uuid",
+                          "type": "string",
+                        },
+                        "name": {
+                          "maxLength": 200,
+                          "minLength": 1,
+                          "type": "string",
+                        },
+                        "role": {
+                          "enum": [
+                            "owner",
+                            "admin",
+                            "editor",
+                            "viewer",
+                          ],
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "role",
+                      ],
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "workspace",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "The existing or newly created personal workspace",
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                    },
+                    "detail": {
+                      "type": "string",
+                    },
+                    "errors": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "code": {
+                            "type": "string",
+                          },
+                          "message": {
+                            "type": "string",
+                          },
+                          "path": {
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "path",
+                          "code",
+                          "message",
+                        ],
+                        "type": "object",
+                      },
+                      "type": "array",
+                    },
+                    "status": {
+                      "type": "integer",
+                    },
+                    "title": {
+                      "type": "string",
+                    },
+                    "type": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Unauthenticated (problem details, \`unauthenticated\`)",
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                    },
+                    "detail": {
+                      "type": "string",
+                    },
+                    "errors": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "code": {
+                            "type": "string",
+                          },
+                          "message": {
+                            "type": "string",
+                          },
+                          "path": {
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "path",
+                          "code",
+                          "message",
+                        ],
+                        "type": "object",
+                      },
+                      "type": "array",
+                    },
+                    "status": {
+                      "type": "integer",
+                    },
+                    "title": {
+                      "type": "string",
+                    },
+                    "type": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Unverified email (\`email_unverified\`) or origin mismatch (\`origin_mismatch\`)",
+          },
+        },
+        "summary": "Idempotent personal-workspace bootstrap (verified email required)",
+        "tags": [
+          "workspaces",
+        ],
+      },
+    },
   },
   "servers": [
     {
@@ -207,6 +580,14 @@ exports[`openapi document > matches the committed snapshot 1`] = `
     {
       "description": "Health and OpenAPI",
       "name": "operations",
+    },
+    {
+      "description": "Session boundary (read-only)",
+      "name": "auth",
+    },
+    {
+      "description": "Workspace bootstrap and tenant context",
+      "name": "workspaces",
     },
   ],
 }
