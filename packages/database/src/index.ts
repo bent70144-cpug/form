@@ -34,3 +34,30 @@ export {
 } from "./bootstrap";
 export { uuidv7, isUuid } from "./uuid";
 export { TENANT_TABLES, isTenantQuery, type TenantTable } from "./tenant-tables";
+export {
+  runCatalogGuard,
+  assertCatalogIntact,
+  CatalogGuardError,
+  type CatalogCheck,
+  type CatalogViolation,
+} from "./catalog-guard";
+export {
+  appSchema,
+  authSchema,
+  pgbossSchema,
+  workspaceRole,
+  formStatus,
+  appTables,
+  workspaces,
+  workspaceMembers,
+  workspaceInvitations,
+  projects,
+  auditLogs,
+  outboxEvents,
+  forms,
+  formDrafts,
+  formVersions,
+  formSlugs,
+  formSessions,
+  submissions,
+} from "./schema";
