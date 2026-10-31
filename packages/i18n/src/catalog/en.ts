@@ -29,6 +29,15 @@ export const en = {
     placeholderNote:
       "The M0 dashboard is a placeholder. Workspaces and forms arrive in the next slices.",
     signedInAs: "Signed in as {email}",
+    workspace: {
+      label: "Workspace",
+    },
+    bootstrap: {
+      settingUp: "Setting up your workspace…",
+      failed:
+        "Setting up your workspace failed. Please try again.",
+      retry: "Retry",
+    },
     signOut: "Sign out",
   },
   auth: {
