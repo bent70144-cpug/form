@@ -4,6 +4,7 @@ import type { NestExpressApplication } from "@nestjs/platform-express";
 import type { Express } from "express";
 import type { Pool } from "pg";
 import { createAuth, resolveEmailProvider } from "@form/auth/server";
+import { createPool } from "@form/database";
 import { AppModule } from "./app.module";
 import { spikeHopRecorder } from "./health.controller";
 import { mountBetterAuth } from "./auth/mount";
@@ -21,17 +22,30 @@ import { loadApiEnv } from "./env";
  *   2. originGuard        — 403 `origin_mismatch` for state-changing requests
  *   3. Better Auth mount  — /v1/auth/* (prefix preserved, see mount.ts;
  *                           /v1/auth/session falls through to Nest)
- *   4. Nest router        — /v1/health, /v1/auth/session, /v1/probe/*, future
- *                           /v1 endpoints
+ *   4. Nest router        — /v1/health, /v1/auth/session, /v1/probe/*,
+ *                           /v1/workspaces/*, future /v1 endpoints
+ *
+ * Two pools, two roles (spec deployment rules): `authPool` — Better Auth's
+ * own connection pool for the `auth` schema — and the request-path tenant
+ * pool (`workspaces/db.ts` APP_POOL) connected as app_user with the
+ * tenant-query guard armed. Tests may inject either.
  */
 export async function createApiApp(
   env = loadApiEnv(),
-  options: { authPool?: Pool; emailProvider?: ReturnType<typeof resolveEmailProvider> } = {},
+  options: {
+    authPool?: Pool;
+    appPool?: Pool;
+    emailProvider?: ReturnType<typeof resolveEmailProvider>;
+  } = {},
 ): Promise<{
   nestApp: NestExpressApplication;
   expressApp: Express;
   /** The DB-backed Better Auth instance (server-side revocation, admin flows). */
   auth: ReturnType<typeof createAuth>;
+  /** The request-path tenant pool (app_user) — closed by close(). */
+  pool: Pool;
+  /** Stops the app: closes the tenant pool unless it was injected. */
+  close(): Promise<void>;
 }> {
   const auth = createAuth({
     databaseUrl: env.DATABASE_URL,
@@ -42,8 +56,12 @@ export async function createApiApp(
     secureCookies: env.NODE_ENV === "production",
   });
 
+  // Request-path pool (pooled app_user URL, tenant-query guard armed).
+  const ownsPool = !options.appPool;
+  const pool = options.appPool ?? createPool(env.DATABASE_URL, { max: 10 });
+
   const nestApp = await NestFactory.create<NestExpressApplication>(
-    AppModule.withAuth(auth),
+    AppModule.withAuth(auth, pool),
     {
       logger: env.NODE_ENV === "test" ? false : ["log", "warn", "error"],
     },
@@ -56,5 +74,13 @@ export async function createApiApp(
   expressApp.use(mountBetterAuth(auth));
 
   await nestApp.init();
-  return { nestApp, expressApp, auth };
+  return {
+    nestApp,
+    expressApp,
+    auth,
+    pool,
+    async close() {
+      if (ownsPool) await pool.end().catch(() => undefined);
+    },
+  };
 }

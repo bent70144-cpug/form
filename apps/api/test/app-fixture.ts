@@ -33,6 +33,8 @@ export interface AuthCoreFixture {
   env: ApiEnv;
   expressApp: Awaited<ReturnType<typeof createApiApp>>["expressApp"];
   auth: Awaited<ReturnType<typeof createApiApp>>["auth"];
+  /** The request-path tenant pool created by createApiApp (closed in close()). */
+  closeApp: () => Promise<void>;
   /** Reads the sink mailbox over its HTTP API (GET /dev/mailbox). */
   mailbox(): Promise<{ messages: Array<{ id: number; to: string[]; raw: string }> }>;
   /** Clears the sink mailbox (DELETE /dev/mailbox). */
@@ -92,9 +94,9 @@ export async function createAuthCoreFixture(
     ...overrides,
   });
   const app = await createApiApp(env, { authPool, ...appOptions });
-
   const mailboxBase = `http://127.0.0.1:${httpPort ?? 0}/dev/mailbox`;
-  return {
+  const closeApp = () => app.close();
+  const fixture: AuthCoreFixture = {
     appName,
     appOrigin: appName,
     urls,
@@ -104,6 +106,7 @@ export async function createAuthCoreFixture(
     env,
     expressApp: app.expressApp,
     auth: app.auth,
+    closeApp,
     async mailbox() {
       const res = await fetch(mailboxBase);
       if (!res.ok) throw new Error(`mailbox read failed: ${res.status}`);
@@ -115,10 +118,14 @@ export async function createAuthCoreFixture(
     async close() {
       await sink.stop().catch(() => undefined);
       await authPool.end().catch(() => undefined);
+      // Release the app's request-path tenant pool BEFORE dropping the
+      // scratch database (open connections block DROP DATABASE).
+      await closeApp();
       await adminClient.end();
       await dropDatabase(scratchDb);
     },
   };
+  return fixture;
 }
 
 /** Extracts the first verification URL found in a raw mail body. */

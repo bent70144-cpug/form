@@ -7,12 +7,15 @@ import { createApiApp } from "./app";
  * `/v1/*` rewrite or server-side calls to API_INTERNAL_URL.
  */
 async function bootstrap() {
-  const { nestApp } = await createApiApp();
+  const { nestApp, close } = await createApiApp();
   const port = Number(process.env.PORT ?? 4000);
   await nestApp.listen(port, "0.0.0.0");
   process.stdout.write(
     JSON.stringify({ event: "api.listening", port }) + "\n",
   );
+  // Release the request-path tenant pool on shutdown (SIGTERM on Render).
+  process.on("SIGTERM", () => void close());
+  process.on("SIGINT", () => void close());
 }
 
 bootstrap().catch((err) => {

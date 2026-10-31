@@ -30,7 +30,11 @@ export class SessionController {
   @Get("session")
   async session(@Req() req: Request, @Res() res: Response): Promise<void> {
     const cookie = req.headers["cookie"];
-    const session = await this.sessions.getMinimalSession(
+    // Ticket 05: the read-only GET now includes the active workspace
+    // {id, name, role} once it exists (resolved via list_workspaces() in a
+    // narrow read-only transaction). It still never writes: before the
+    // dashboard's client bootstrap component runs, `workspace` is null.
+    const session = await this.sessions.getSessionWithWorkspace(
       typeof cookie === "string" ? cookie : undefined,
     );
     if (!session) {
