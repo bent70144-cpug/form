@@ -28,10 +28,31 @@ export interface VerificationEmailInput {
   user: { id: string; email: string; name: string };
 }
 
+/** Input for the password-reset email (ticket 04 — same contract shape). */
+export interface PasswordResetEmailInput {
+  /** Recipient (the user who requested the reset). */
+  to: string;
+  /** Subject line, resolved from the i18n catalog by the caller. */
+  subject: string;
+  /** Plain-text body. Contains the single-use reset link (1 h expiry). */
+  text: string;
+  /**
+   * The reset URL handed over by Better Auth
+   * (`/v1/auth/reset-password/<token>?callbackURL=…`). Implementations embed
+   * it verbatim in the message body and must NEVER log it.
+   */
+  url: string;
+  /** The raw reset token — available for programmatic flows, never logged. */
+  token: string;
+  user: { id: string; email: string; name: string };
+}
+
 export interface EmailProvider {
   /** Stable adapter name (used in logs/metrics; never the token). */
   readonly name: string;
   sendVerificationEmail(input: VerificationEmailInput): Promise<void>;
+  /** Password-reset email (ticket 04) — same transport, i18n-resolved copy. */
+  sendPasswordResetEmail(input: PasswordResetEmailInput): Promise<void>;
 }
 
 /** Thrown when a deployed provider is selected but its credentials are absent. */

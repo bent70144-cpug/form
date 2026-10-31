@@ -15,4 +15,14 @@ describe("i18n", () => {
     // @ts-expect-error — intentionally invalid key
     expect(() => t("does.not.exist")).toThrow(/Missing i18n message/);
   });
+
+  it("ships the ticket-04 reset + rate-limit keys (spec: auth errors use i18n keys)", () => {
+    // ONE shared enumeration-safe response key (reset + future flows).
+    expect(t("auth.enumerationSafeResponse", { email: "a@b.c" })).toContain("a@b.c");
+    // Reset email copy (subject + body carry the single-use 1 h link).
+    expect(t("auth.email.resetSubject")).toContain("Reset");
+    expect(t("auth.email.resetBody", { name: "U", url: "http://x/y" })).toContain("http://x/y");
+    // The 429 problem title key referenced by the rateLimited() factory.
+    expect(t("errors.rateLimited.title")).toContain("Too many");
+  });
 });

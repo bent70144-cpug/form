@@ -15,7 +15,13 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
+  "dependencies": {
+    "@form/database": "workspace:*",
+    "pg": "^8.13.1",
+    "pg-boss": "12.38.0"
+  },
   "devDependencies": {
+    "@types/pg": "^8.11.10",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   }
