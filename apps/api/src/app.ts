@@ -1,85 +1,47 @@
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import type { Logger } from "pino";
-import { buildOpenApiDocument } from "@form/contracts";
-import {
-  createHealthModule,
-  validateHealthResponse,
-} from "./health";
-import { ProblemHttpError, problemFromError } from "./problem-details";
-
-export interface DatabaseCheck {
-  (): Promise<boolean>;
-}
-
-export interface CreateAppOptions {
-  checkDatabase: DatabaseCheck;
-  logger: Logger;
-}
-
-export type AppHandler = (
-  request: IncomingMessage,
-  response: ServerResponse,
-) => Promise<void>;
-
-function sendJson(
-  response: ServerResponse,
-  status: number,
-  body: unknown,
-  contentType = "application/json",
-): void {
-  response.writeHead(status, { "content-type": contentType });
-  response.end(JSON.stringify(body));
-}
+import "reflect-metadata";
+import { NestFactory } from "@nestjs/core";
+import type { NestExpressApplication } from "@nestjs/platform-express";
+import type { Express } from "express";
+import type { Pool } from "pg";
+import { AppModule } from "./app.module";
+import { spikeHopRecorder } from "./health.controller";
+import { createAuth } from "./auth/auth";
+import { mountBetterAuth } from "./auth/mount";
+import { loadApiEnv } from "./env";
 
 /**
- * Request dispatcher for the M0 API. Routes are explicit; every error path
- * renders an RFC 9457 problem body via the shared filter.
+ * Builds the API app without listening (shared by `main.ts` and the
+ * integration tests). Order matters:
+ *
+ *   1. spikeHopRecorder   — records the hop Nest sees (removed in ticket 04)
+ *   2. Better Auth mount  — /v1/auth/* (prefix preserved, see mount.ts)
+ *   3. Nest router        — /v1/health and future /v1 endpoints
  */
-export function createApp(options: CreateAppOptions): AppHandler {
-  const health = createHealthModule({ checkDatabase: options.checkDatabase });
-
-  return async (request, response) => {
-    const url = new URL(request.url ?? "/", "http://internal");
-    try {
-      if (request.method === "GET" && url.pathname === "/v1/health") {
-        const result = await health.getHealth();
-        // Contract round-trip: throws if the shape drifts from @form/contracts.
-        const body = validateHealthResponse({
-          status: result.status,
-          db: result.db,
-        });
-        sendJson(response, 200, { ...body, message: result.message });
-        return;
-      }
-
-      if (request.method === "GET" && url.pathname === "/v1/openapi.json") {
-        sendJson(response, 200, buildOpenApiDocument());
-        return;
-      }
-
-      throw new ProblemHttpError("not_found");
-    } catch (error) {
-      const { status, body } = problemFromError(error);
-      if (status >= 500) {
-        options.logger.error({ err: error }, "unhandled request failure");
-      }
-      sendJson(response, status, body, "application/problem+json");
-    }
-  };
-}
-
-/** Binds the dispatcher to a node:http server (wired in src/index.ts). */
-export function createHttpServer(options: CreateAppOptions) {
-  const handler = createApp(options);
-  return createServer((request, response) => {
-    void handler(request, response).catch((error) => {
-      options.logger.error({ err: error }, "dispatcher failure");
-      if (!response.headersSent) {
-        const { status, body } = problemFromError(error);
-        sendJson(response, status, body, "application/problem+json");
-      } else {
-        response.end();
-      }
-    });
+export async function createApiApp(
+  env = loadApiEnv(),
+  options: { authPool?: Pool } = {},
+): Promise<{
+  nestApp: NestExpressApplication;
+  expressApp: Express;
+}> {
+  const nestApp = await NestFactory.create<NestExpressApplication>(AppModule, {
+    logger: env.NODE_ENV === "test" ? false : ["log", "warn", "error"],
   });
+  nestApp.setGlobalPrefix("v1");
+  const expressApp = nestApp.getHttpAdapter().getInstance() as Express;
+
+  expressApp.use(spikeHopRecorder);
+  expressApp.use(
+    mountBetterAuth(
+      createAuth({
+        databaseUrl: env.DATABASE_URL,
+        appOrigin: env.APP_ORIGIN,
+        secret: env.BETTER_AUTH_SECRET,
+        pool: options.authPool,
+      }),
+    ),
+  );
+
+  await nestApp.init();
+  return { nestApp, expressApp };
 }

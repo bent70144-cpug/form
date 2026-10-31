@@ -38,7 +38,7 @@ describe("package dependency boundaries", () => {
         const source = fs.readFileSync(file, "utf8");
         for (const match of source.matchAll(IMPORT_RE)) {
           const spec = match[1];
-          if (!spec) continue;
+          if (spec === undefined) continue;
           if (APP_SPECIFIERS.some((a) => spec === a || spec.startsWith(`${a}/`))) {
             violations.push(`${path.relative(REPO_ROOT, file)} -> ${spec}`);
           }
@@ -57,7 +57,7 @@ describe("package dependency boundaries", () => {
         const source = fs.readFileSync(file, "utf8");
         for (const match of source.matchAll(IMPORT_RE)) {
           const spec = match[1];
-          if (!spec || !spec.startsWith(".")) continue;
+          if (!spec?.startsWith(".")) continue;
           const resolved = path.resolve(path.dirname(file), spec);
           if (!resolved.startsWith(PACKAGES_DIR + path.sep)) {
             violations.push(`${path.relative(REPO_ROOT, file)} -> ${spec}`);

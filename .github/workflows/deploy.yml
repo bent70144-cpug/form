@@ -1,0 +1,70 @@
+# Alpha deploy pipeline (ticket 02 — spec "Deployment and configuration").
+#
+# Order is load-bearing: migrations run FIRST (as the `migrator`, from a GitHub
+# Actions secret), and only then is the Render deploy hook triggered. Render
+# auto-deploy on push MUST be disabled in the Render dashboard (Settings →
+# Build & Deploy → Auto-Deploy: off) so new code cannot start before the schema
+# exists.
+#
+# Render free tier has NO pre-deploy migration command — migrations never run
+# as a Render pre-deploy step; GitHub Actions migration-before-deploy is the
+# primary path.
+#
+# Required secrets (set in the GitHub repository settings, never in Render):
+#   MIGRATOR_DATABASE_URL   direct Neon URL for the `migrator` role
+#                           (Neon: pooled URL with ?pgbouncer=true is NOT used
+#                           here — migrations and pg-boss use the DIRECT URL)
+#   RENDER_DEPLOY_HOOK_URL  the deploy hook URL from the Render service
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Run migrations (migrator role)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The migrator URL exists ONLY here (GitHub secret) — it never appears in
+      # Render's runtime environment.
+      - name: Apply migrations as the migrator
+        run: pnpm db:migrate
+        env:
+          MIGRATOR_DATABASE_URL: ${{ secrets.MIGRATOR_DATABASE_URL }}
+
+  deploy:
+    name: Trigger Render deploy hook
+    needs: migrate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy
+        run: |
+          curl -fsS -X POST \
+            -H "Accept: application/json" \
+            "$RENDER_DEPLOY_HOOK_URL" > /dev/null
+          echo "Render deploy triggered after successful migrations."
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+
+      # Smoke test is a later milestone ("The final deployment milestone is a
+      # smoke test, not the first deploy") — intentionally absent here.
