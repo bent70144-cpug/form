@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import type { Express } from "express";
+import type { Response as SupertestResponse } from "supertest";
 import {
   createAuthCoreFixture,
   type AuthCoreFixture,
@@ -69,7 +70,7 @@ function getSession() {
 
 /** Asserts the stable RFC 9457 429 contract (body + Retry-After). */
 async function expectRateLimited(
-  res: Awaited<ReturnType<ReturnType<typeof request>["send"]>>,
+  res: SupertestResponse,
 ): Promise<void> {
   expect(res.status).toBe(429);
   expect(res.headers["content-type"]).toContain("application/problem+json");

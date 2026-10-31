@@ -63,7 +63,7 @@ async function requestResetAndGetToken(email: string): Promise<string> {
   expect(res.status).toBe(200);
   const raw = await waitForResetMailTo(email);
   const match = raw.match(/\/v1\/auth\/reset-password\/([A-Za-z0-9]+)\?callbackURL=/);
-  if (!match) throw new Error(`no reset URL in mail body: ${raw.slice(0, 400)}`);
+  if (!match?.[1]) throw new Error(`no reset URL in mail body: ${raw.slice(0, 400)}`);
   return match[1];
 }
 
