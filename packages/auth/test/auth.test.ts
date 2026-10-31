@@ -41,8 +41,10 @@ describe("@form/auth/client", () => {
     const session = await client.getSession("sid=abc");
     expect(session?.user.id).toBe("u1");
     expect(session?.workspace).toBeNull();
-    expect(calls[0].url).toBe("http://127.0.0.1:4000/v1/auth/session");
-    expect((calls[0].init.headers as Record<string, string>)["cookie"]).toBe(
+    expect(calls).toHaveLength(1);
+    const firstCall = calls[0]!;
+    expect(firstCall.url).toBe("http://127.0.0.1:4000/v1/auth/session");
+    expect((firstCall.init.headers as Record<string, string>)["cookie"]).toBe(
       "sid=abc",
     );
   });

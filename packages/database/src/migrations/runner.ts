@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { createPool } from "./pool";
+import { createPool } from "../pool";
 
 /**
  * SQL migration runner (spec: "Migrations run as the `migrator` table owner;

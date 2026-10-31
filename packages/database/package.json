@@ -9,7 +9,10 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./testing": "./src/testing/index.ts"
+    "./testing": {
+      "types": "./src/testing/index.ts",
+      "default": "./src/testing/index.ts"
+    }
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -17,6 +20,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@form/config": "workspace:*",
     "drizzle-orm": "^0.45.4",
     "pg": "^8.13.1"
   },

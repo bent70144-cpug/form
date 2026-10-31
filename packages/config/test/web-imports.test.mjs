@@ -1,7 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ESLint } from "eslint";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import {
@@ -17,22 +16,29 @@ const require = createRequire(import.meta.url);
  * web app imports the database package or the server auth entrypoint").
  */
 
-let tmpDir;
+const REPO_ROOT = path.resolve(import.meta.dirname, "../../..");
+const WEB_ROOT = path.join(REPO_ROOT, "apps/web");
+
+let lintDir;
 
 beforeAll(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "form-web-boundary-"));
-  fs.mkdirSync(path.join(tmpDir, "src"), { recursive: true });
+  // The webOverrides() rule is scoped with `files: ["apps/web/**..."]`, which
+  // ESLint matches relative to the config base path (cwd). Fixtures therefore
+  // live INSIDE apps/web and lint with the repo root as cwd — the same shape
+  // as the CI root lint — so the scoped rule actually applies.
+  lintDir = fs.mkdtempSync(path.join(WEB_ROOT, ".boundary-fixture-"));
+  fs.mkdirSync(path.join(lintDir, "src"), { recursive: true });
 });
 
 afterAll(() => {
-  fs.rmSync(tmpDir, { recursive: true, force: true });
+  fs.rmSync(lintDir, { recursive: true, force: true });
 });
 
 async function lintFixture(fileName, source) {
-  const filePath = path.join(tmpDir, "src", fileName);
+  const filePath = path.join(lintDir, "src", fileName);
   fs.writeFileSync(filePath, source);
   const eslint = new ESLint({
-    cwd: path.resolve(import.meta.dirname, "../../apps/web"),
+    cwd: REPO_ROOT,
     overrideConfigFile: true,
     overrideConfig: (await import("../../apps/web/eslint.config.mjs")).default,
   });
@@ -79,7 +85,7 @@ describe("web import boundary (eslint rule)", () => {
 
 describe("web import boundary (build-time script)", () => {
   it("detects a forbidden import in a scanned source tree", () => {
-    const caseDir = path.join(tmpDir, "case-offend");
+    const caseDir = path.join(lintDir, "case-offend");
     fs.mkdirSync(path.join(caseDir, "app"), { recursive: true });
     fs.writeFileSync(
       path.join(caseDir, "app", "page.tsx"),
@@ -91,7 +97,7 @@ describe("web import boundary (build-time script)", () => {
   });
 
   it("passes a clean source tree", () => {
-    const caseDir = path.join(tmpDir, "case-clean");
+    const caseDir = path.join(lintDir, "case-clean");
     fs.mkdirSync(path.join(caseDir, "app"), { recursive: true });
     fs.writeFileSync(
       path.join(caseDir, "app", "page.tsx"),

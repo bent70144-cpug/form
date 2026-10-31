@@ -33,7 +33,7 @@ export function buildOpenApiDocument(): Record<string, unknown> {
               content: {
                 "application/json": {
                   schema: zodToJsonSchema(healthResponseSchema, {
-                    target: "openapi-3.0",
+                    target: "openApi3",
                   }),
                 },
               },
@@ -43,7 +43,7 @@ export function buildOpenApiDocument(): Record<string, unknown> {
               content: {
                 "application/problem+json": {
                   schema: zodToJsonSchema(problemDetailsSchema, {
-                    target: "openapi-3.0",
+                    target: "openApi3",
                   }),
                 },
               },
@@ -72,10 +72,10 @@ export function buildOpenApiDocument(): Record<string, unknown> {
     components: {
       schemas: {
         HealthResponse: zodToJsonSchema(healthResponseSchema, {
-          target: "openapi-3.0",
+          target: "openApi3",
         }),
         ProblemDetails: zodToJsonSchema(problemDetailsSchema, {
-          target: "openapi-3.0",
+          target: "openApi3",
         }),
       },
     },

@@ -31,7 +31,7 @@ const PID_FILE = path.join(os.tmpdir(), "form-embedded-pg.pid");
 
 let handle: EmbeddedPostgres | null = null;
 
-export function adminUrl(database = EMBEDDED_PG.adminDatabase): string {
+export function adminUrl(database: string = EMBEDDED_PG.adminDatabase): string {
   return `postgres://${EMBEDDED_PG.user}:${EMBEDDED_PG.password}@${EMBEDDED_PG.host}:${EMBEDDED_PG.port}/${database}`;
 }
 

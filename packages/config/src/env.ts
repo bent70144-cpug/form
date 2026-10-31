@@ -80,6 +80,25 @@ export const workerEnvSchema = z.object({
 });
 export type WorkerEnv = z.infer<typeof workerEnvSchema>;
 
+/**
+ * Web process. PUBLIC configuration only — no database URLs, no auth secrets
+ * (the supervisor allowlist enforces this at spawn time and the web build
+ * checks the import boundary; this schema is the third guardrail so a
+ * misconfigured web process fails fast instead of silently leaking).
+ */
+export const webEnvSchema = z.object({
+  NODE_ENV: nodeEnv,
+  PORT: z.coerce.number().int().positive().default(3000),
+  /** Public origin browsers use (used for links and cookie scoping later). */
+  APP_ORIGIN: z.string().url(),
+  /** Internal (non-public) API base URL the server-side calls go to. */
+  API_INTERNAL_URL: z.string().url(),
+  API_INTERNAL_PORT: z.coerce.number().int().positive().optional(),
+  LOG_LEVEL: logLevel.default("info"),
+  NEXT_TELEMETRY_DISABLED: z.string().optional(),
+});
+export type WebEnv = z.infer<typeof webEnvSchema>;
+
 /** Migration runner. Direct (non-pooled) connection as the migrator role. */
 export const migratorEnvSchema = z.object({
   MIGRATOR_DATABASE_URL: postgresUrl,

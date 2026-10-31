@@ -38,10 +38,22 @@ export function createMailSink({ smtpPort = 1025, httpPort = 5434 } = {}) {
 
     socket.on("data", (chunk) => {
       buffer += chunk.toString("utf8");
-      let idx;
-      while ((idx = buffer.indexOf("\r\n")) >= 0 || (idx = buffer.indexOf("\n")) >= 0) {
-        const rawLine = buffer.slice(0, idx).replace(/\r$/, "");
-        buffer = buffer.slice(idx + 1);
+      for (;;) {
+        // Prefer a CRLF terminator; fall back to a bare LF (and strip any CR).
+        // The terminator is consumed ENTIRELY — skipping only one byte of a
+        // "\r\n" leaves a "\n" behind that would be parsed as a phantom empty
+        // command line (and answered with a spurious "250 OK").
+        let rawLine;
+        const crlf = buffer.indexOf("\r\n");
+        if (crlf >= 0) {
+          rawLine = buffer.slice(0, crlf);
+          buffer = buffer.slice(crlf + 2);
+        } else {
+          const lf = buffer.indexOf("\n");
+          if (lf < 0) break;
+          rawLine = buffer.slice(0, lf).replace(/\r$/, "");
+          buffer = buffer.slice(lf + 1);
+        }
         if (mode === "data") {
           if (rawLine === ".") {
             messages.push({

@@ -54,6 +54,14 @@ export function baseConfig() {
           "warn",
           { prefer: "type-imports" },
         ],
+        "@typescript-eslint/no-unused-vars": [
+          "error",
+          {
+            argsIgnorePattern: "^_",
+            varsIgnorePattern: "^_",
+            caughtErrorsIgnorePattern: "^_",
+          },
+        ],
         "no-console": "off",
       },
     },
