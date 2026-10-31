@@ -1,5 +1,9 @@
 import { EmailProviderNotConfiguredError } from "./types";
-import type { EmailProvider, VerificationEmailInput } from "./types";
+import type {
+  EmailProvider,
+  PasswordResetEmailInput,
+  VerificationEmailInput,
+} from "./types";
 
 /**
  * DEPLOYED adapter: Resend HTTPS API (https://resend.com/docs/api-reference).
@@ -37,6 +41,19 @@ export class ResendEmailProvider implements EmailProvider {
   constructor(private readonly options: ResendProviderOptions = {}) {}
 
   async sendVerificationEmail(input: VerificationEmailInput): Promise<void> {
+    await this.send(input.to, input.subject, input.text);
+  }
+
+  async sendPasswordResetEmail(input: PasswordResetEmailInput): Promise<void> {
+    await this.send(input.to, input.subject, input.text);
+  }
+
+  /**
+   * Single HTTPS send path for both message kinds. Fails LOUDLY without
+   * RESEND_API_KEY and never includes the message body (which contains the
+   * verification/reset link) in error text.
+   */
+  private async send(to: string, subject: string, text: string): Promise<void> {
     if (!this.options.apiKey) {
       throw new EmailProviderNotConfiguredError(
         "Resend email provider is not configured: set EMAIL_PROVIDER=resend and RESEND_API_KEY (server-side only). Before the first outside tester, own and verify a sending domain — the onrender.com hostname cannot be a verified sender.",
@@ -51,14 +68,14 @@ export class ResendEmailProvider implements EmailProvider {
       },
       body: JSON.stringify({
         from: this.options.from ?? "Form <no-reply@localhost.test>",
-        to: [input.to],
-        subject: input.subject,
-        text: input.text,
+        to: [to],
+        subject,
+        text,
       }),
     });
     if (!response.ok) {
       // Deliberately does not include the request body (which contains the
-      // verification link) in the error message.
+      // verification/reset link) in the error message.
       throw new Error(`Resend email provider failed with status ${response.status}`);
     }
   }

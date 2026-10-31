@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { t } from "@form/i18n";
 import {
   createSessionClient,
   sessionSchema,
@@ -7,6 +8,7 @@ import {
 import {
   AUTH_MOUNT,
   createAuth,
+  RESET_TOKEN_EXPIRES_IN_SECONDS,
   resolveEmailProvider,
   SESSION_EXPIRES_IN_SECONDS,
   SESSION_UPDATE_AGE_SECONDS,
@@ -213,3 +215,73 @@ describe("email providers", () => {
     ).rejects.toThrow(/status 403/);
   });
 });
+
+describe("password reset configuration (ticket 04)", () => {
+  it("pins the one-hour single-use reset token expiry", () => {
+    expect(RESET_TOKEN_EXPIRES_IN_SECONDS).toBe(3600);
+  });
+
+  it("exposes the Better Auth reset endpoints on the mounted instance", () => {
+    const auth = createAuth({
+      databaseUrl: "postgres://app_user:x@127.0.0.1:5433/form_test",
+      appOrigin: "http://localhost:3000",
+      secret: "not-used-in-this-smoke-test-0123456789",
+      emailProvider: new RecordingProvider(),
+    });
+    expect(typeof auth.api.requestPasswordReset).toBe("function");
+    expect(typeof auth.api.resetPassword).toBe("function");
+  });
+
+  it("delivers reset email through the configured EmailProvider with i18n copy", async () => {
+    const provider = new RecordingProvider();
+    const auth = createAuth({
+      databaseUrl: "postgres://app_user:x@127.0.0.1:5433/form_test",
+      appOrigin: "http://localhost:3000",
+      secret: "not-used-in-this-smoke-test-0123456789",
+      emailProvider: provider,
+    });
+    const context = await (
+      auth as unknown as { $context: Promise<{ options: Record<string, unknown> }> }
+    ).$context;
+    const emailAndPassword = context.options.emailAndPassword as {
+      sendResetPassword?: (input: {
+        user: { id: string; email: string; name: string };
+        url: string;
+        token: string;
+      }) => Promise<void>;
+      revokeSessionsOnPasswordReset?: boolean;
+      resetPasswordTokenExpiresIn?: number;
+    };
+    expect(emailAndPassword.revokeSessionsOnPasswordReset).toBe(true);
+    expect(emailAndPassword.resetPasswordTokenExpiresIn).toBe(3600);
+    expect(typeof emailAndPassword.sendResetPassword).toBe("function");
+
+    await emailAndPassword.sendResetPassword?.({
+      user: { id: "u1", email: "user@example.com", name: "U" },
+      url: "http://localhost:3000/v1/auth/reset-password/TOKEN?callbackURL=x",
+      token: "TOKEN",
+    });
+    expect(provider.resets).toHaveLength(1);
+    expect(provider.resets[0]?.to).toBe("user@example.com");
+    expect(provider.resets[0]?.subject).toBe(t("auth.email.resetSubject"));
+    expect(provider.resets[0]?.text).toContain(
+      "http://localhost:3000/v1/auth/reset-password/TOKEN",
+    );
+    expect(provider.resets[0]?.text).toContain(t("auth.email.resetBody", { name: "U", url: "" }).split("\n\n")[0]);
+  });
+});
+
+/** Test double capturing both message kinds without any transport. */
+class RecordingProvider {
+  readonly name = "recording";
+  readonly resets: Array<{ to: string; subject: string; text: string }> = [];
+  readonly verifications: Array<{ to: string; subject: string; text: string }> = [];
+
+  async sendVerificationEmail(input: { to: string; subject: string; text: string }) {
+    this.verifications.push(input);
+  }
+
+  async sendPasswordResetEmail(input: { to: string; subject: string; text: string }) {
+    this.resets.push(input);
+  }
+}
