@@ -66,6 +66,8 @@ describe("openapi document", () => {
     const get = doc.paths["/v1/health"] as {
       get: { responses: Record<string, { content: Record<string, unknown> }> };
     };
-    expect(get.get.responses["200"].content["application/json"]).toBeTruthy();
+    expect(
+      get.get.responses["200"]?.content["application/json"],
+    ).toBeTruthy();
   });
 });

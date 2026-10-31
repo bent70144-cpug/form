@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v3";
 
 /**
  * RFC 9457 Problem Details with a stable `code` and optional field errors

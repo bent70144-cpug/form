@@ -39,10 +39,12 @@ describe("supervisor child environment allowlist", () => {
 
   it("refuses to spawn the web process if a forbidden key would be present", () => {
     // A misconfigured allowlist must fail closed rather than leak.
+    // NEXT_PUBLIC_* keys are forwarded to the web child, so a secret hiding
+    // under that prefix must trip the fail-closed guard.
     expect(() =>
       buildChildEnv("web", {
         ...BASE,
-        MIGRATOR_DATABASE_URL: "postgres://migrator:x@localhost/db",
+        NEXT_PUBLIC_DATABASE_URL: "postgres://app_user:x@localhost/db",
       }),
     ).toThrow(/forbidden environment keys/i);
   });

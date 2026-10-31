@@ -55,7 +55,9 @@ export function createSessionClient(options: SessionClientOptions): SessionClien
       if (cookieHeader) headers["cookie"] = cookieHeader;
       const response = await fetchImpl(
         `${options.baseUrl.replace(/\/$/, "")}/v1/auth/session`,
-        { headers, cache: "no-store" },
+        // No `cache` option: Node fetch (undici) keeps responses uncached by
+        // default and its RequestInit type does not declare `cache`.
+        { headers },
       );
       if (response.status === 401) return null;
       if (!response.ok) {

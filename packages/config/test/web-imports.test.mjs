@@ -29,10 +29,17 @@ afterAll(() => {
 });
 
 async function lintFixture(fileName, source) {
-  const filePath = path.join(tmpDir, "src", fileName);
-  fs.writeFileSync(filePath, source);
+  // ESLint matches the config's `files` globs against the given filePath.
+  // The web overrides target apps/web, so lint the fixture text under a
+  // virtual path inside apps/web (lintText never reads the file from disk).
+  const repoRoot = path.resolve(import.meta.dirname, "../../..");
+  // ESLint matches the config's `files` globs against paths relative to the
+  // config base (cwd). The web overrides target `apps/web/**`, so lint the
+  // fixture text under an apps/web path with the repo root as cwd — lintText
+  // never reads the file from disk.
+  const filePath = path.join(repoRoot, "apps/web/src", fileName);
   const eslint = new ESLint({
-    cwd: path.resolve(import.meta.dirname, "../../apps/web"),
+    cwd: repoRoot,
     overrideConfigFile: true,
     overrideConfig: (await import("../../apps/web/eslint.config.mjs")).default,
   });
