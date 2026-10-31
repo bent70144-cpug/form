@@ -9,6 +9,7 @@ export const ErrorCodes = {
   unauthenticated: "unauthenticated",
   forbidden: "forbidden",
   email_unverified: "email_unverified",
+  origin_mismatch: "origin_mismatch",
   not_found: "not_found",
   draft_conflict: "draft_conflict",
   form_full: "form_full",
