@@ -10,7 +10,10 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@form/auth": "workspace:*",
+    "@form/contracts": "workspace:*",
     "@form/database": "workspace:*",
+    "@form/i18n": "workspace:*",
     "@nestjs/common": "12.3.2",
     "@nestjs/core": "12.3.2",
     "@nestjs/platform-express": "12.3.2",

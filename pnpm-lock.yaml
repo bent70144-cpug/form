@@ -35,9 +35,18 @@ importers:
 
   apps/api:
     dependencies:
+      '@form/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@form/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@form/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@form/i18n':
+        specifier: workspace:*
+        version: link:../../packages/i18n
       '@nestjs/common':
         specifier: 12.3.2
         version: 12.3.2(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -170,10 +179,31 @@ importers:
 
   packages/auth:
     dependencies:
+      '@form/database':
+        specifier: workspace:*
+        version: link:../database
+      '@form/i18n':
+        specifier: workspace:*
+        version: link:../i18n
+      better-auth:
+        specifier: 1.7.14
+        version: 1.7.14(@opentelemetry/api@1.10.0)(drizzle-orm@0.45.4(@opentelemetry/api@1.10.0)(@types/pg@8.23.1)(kysely@0.28.18)(pg@8.23.1))(next@16.4.3(@opentelemetry/api@1.10.0)(@types/node@22.20.5)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(pg@8.23.1)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(vitest@2.1.9(@types/node@22.20.5))
+      drizzle-orm:
+        specifier: ^0.45.4
+        version: 0.45.4(@opentelemetry/api@1.10.0)(@types/pg@8.23.1)(kysely@0.28.18)(pg@8.23.1)
+      pg:
+        specifier: ^8.13.1
+        version: 8.23.1
       zod:
         specifier: ^3.24.1
         version: 3.25.76
     devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.5
+      '@types/pg':
+        specifier: ^8.11.10
+        version: 8.23.1
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
