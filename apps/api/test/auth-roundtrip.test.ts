@@ -167,13 +167,15 @@ describe("Better Auth mounted under /v1/auth (NestJS)", () => {
     expect(probe.body).toMatchObject({ code: "email_unverified", status: 403 });
   });
 
-  it("records what Nest sees as the peer address and forwarded headers (spike hop)", async () => {
+  it("records what Nest sees as the peer address (ticket-04 hop diagnostics)", async () => {
     const res = await request(expressApp).get("/v1/health");
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ status: "ok", db: "ok" });
     // Direct (in-process) hop: the peer is loopback. Through the Next.js
-    // rewrite the peer is the Next process — see the ADR curl runbook.
-    expect(res.headers["x-spike-peer-address"]).toMatch(/127\.0\.0\.1|::1|::ffff:127\.0\.0\.1/);
+    // rewrite the peer is the Next process — see the ADR curl runbook. The
+    // ADR-0003 `x-spike-*` headers are replaced by the ticket-04 hop
+    // diagnostics (`x-hop-*` / `x-derived-client-ip`, non-production only).
+    expect(res.headers["x-hop-peer-address"]).toMatch(/127\.0\.0\.1|::1|::ffff:127\.0\.0\.1/);
   });
 
   it("keeps app_user DML-only in the auth schema (no CREATE)", async () => {

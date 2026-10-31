@@ -1,5 +1,5 @@
 /**
- * Rate limiting (ticket 04 library portion; reused by ticket 10). Exports:
+ * Rate limiting (ticket 04; reused by ticket 10). Exports:
  *
  * - `RateLimiter` — in-memory fixed-window limiter, memory-bounded
  *   (`./rate-limiter` documents the semantics).
@@ -12,8 +12,10 @@
  *   plus the `RATE_LIMIT_RULES` aggregate and `RateLimitRule` type.
  * - `rateLimited(retryAfterSec)` — the stable 429 Problem-Details body
  *   factory (`code: "rate_limited"`) with the `Retry-After` header value.
- * - `RateLimitModule` — self-contained Nest module; ticket 04 wiring
- *   registers it (AppModule is owned by ticket 03's worktree right now).
+ * - `RateLimitModule` — self-contained Nest module (standalone reuse; the
+ *   API's `createApiApp` wires the process-wide limiter instance directly).
+ * - Endpoint wiring (ticket 04): `createRateLimitGuard`, `sendRateLimited`,
+ *   `normalizeEmailForLimit`, `RATE_LIMITED_ROUTES` (`./wire`).
  */
 export {
   DEFAULT_MAX_TRACKED_KEYS,
@@ -41,3 +43,9 @@ export {
   SIGNUP_PER_HOUR_PER_IP,
 } from "./limits";
 export { RateLimitModule } from "./rate-limit.module";
+export {
+  createRateLimitGuard,
+  normalizeEmailForLimit,
+  RATE_LIMITED_ROUTES,
+  sendRateLimited,
+} from "./wire";

@@ -24,6 +24,12 @@ const apiEnvSchema = z.object({
   SMTP_HOST: z.string().min(1).default("127.0.0.1"),
   SMTP_PORT: z.coerce.number().int().positive().default(1025),
   EMAIL_FROM: z.string().min(3).optional(),
+  // --- trusted-proxy client-IP derivation (ticket 04) ---
+  // Explicit values win. Defaults (applied in common/trusted-ip/config.ts):
+  // 1 trusted hop behind the Render platform edge (RENDER=true), 0 elsewhere.
+  TRUSTED_PROXY_COUNT: z.coerce.number().int().min(0).max(64).optional(),
+  /** Comma-separated forwarded-header names, priority order (left = highest). */
+  TRUSTED_PROXY_HEADERS: z.string().min(1).optional(),
 });
 
 export type ApiEnv = z.infer<typeof apiEnvSchema>;

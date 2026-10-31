@@ -53,6 +53,29 @@ export const en = {
         "We sent a verification link to {email}. Open it to activate your account.",
     },
     passwordPolicyHint: "Use {min}–{max} characters.",
+    /**
+     * THE shared enumeration-safe response (ticket 04: enumeration-safe
+     * responses share ONE key). Rendered identically no matter whether the
+     * address exists: the sign-up "check your inbox" notice and the
+     * forgot-password confirmation both resolve THIS key — never a message
+     * that could confirm or deny account existence.
+     */
+    enumerationSafeResponse:
+      "If an account exists for {email}, we have sent it an email. Please check your inbox.",
+    forgotPassword: {
+      title: "Forgot your password?",
+      emailLabel: "Email",
+      submit: "Send reset link",
+      backToSignIn: "Back to sign in",
+    },
+    resetPassword: {
+      title: "Choose a new password",
+      newPasswordLabel: "New password",
+      submit: "Reset password",
+      success: "Your password has been reset. Sign in with the new password.",
+      invalidToken: "This reset link is invalid, already used, or expired. Request a new one.",
+      backToSignIn: "Back to sign in",
+    },
     verifyEmail: {
       title: "Email verification",
       success: "Your email is verified. You can sign in now.",
@@ -72,6 +95,9 @@ export const en = {
       verificationSubject: "Verify your email",
       verificationBody:
         "Hi {name},\n\nOpen this link to verify your email for your Form account:\n\n{url}\n\nIf you didn't create an account, you can ignore this message.",
+      resetSubject: "Reset your password",
+      resetBody:
+        "Hi {name},\n\nOpen this link to choose a new password for your Form account:\n\n{url}\n\nThe link works once and expires after one hour. If you didn't request a reset, you can ignore this message.",
     },
     errors: {
       invalidCredentials: "Invalid email or password.",

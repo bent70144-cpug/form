@@ -173,3 +173,65 @@ if (!result.ok) {
   Render (the env default only covers the standard single-proxy topology).
 - Rate-limit tests run without a database (pure in-memory + fake timers), so
   they stay fast and independent of the embedded-Postgres fixture.
+
+## Wiring notes (ticket 04 endpoint wiring — landed)
+
+The endpoint wiring was implemented in `apps/api` after ticket 03 landed:
+
+- **Placement.** `createApiApp` registers the guard as Express middleware in
+  this order: `originGuard` → `express.json()` (first-pass body parse) →
+  `hopDiagnostics` (non-production) → `createRateLimitGuard` → the Better Auth
+  mount → the Nest router. The Origin check therefore still runs first (a
+  cross-site request cannot consume limiter slots, so per-email buckets cannot
+  be exhausted by originless noise), and a 429 never reaches Better Auth or
+  Nest. A Nest interceptor would not cover the auth routes at all — they are
+  handled by the mounted Better Auth handler, which bypasses the Nest router.
+- **`express.json()` before the mount.** The guard needs the sign-in /
+  reset-request body to key the per-email dimension. Better Auth's node
+  adapter (`better-call` `getRequest`) transparently re-serializes an
+  already-parsed `req.body` when the raw stream is consumed, so the early
+  parse does not disturb the mount (verified against better-call 1.4.4).
+  Limit: 64 KB.
+- **Env schema merged.** `TRUSTED_PROXY_COUNT` / `TRUSTED_PROXY_HEADERS` moved
+  into `apps/api/src/env.ts` (Zod-validated, fails at startup) and are mapped
+  to `TrustedIpConfig` by `trustedIpConfigFromValues` in
+  `common/trusted-ip/config.ts`. The module-local `loadTrustedIpConfig`
+  REMAINS as the env-record entry point (it is the tested library surface that
+  ticket 10 reuses); `env.ts` duplicates only the two field validators so a
+  bad value fails API boot with the standard API-env error shape. (Amends the
+  "deletes the module-local loader" note above — the loader stays; the
+  validation contract is enforced on both layers.)
+- **Route/limits wiring** (`RATE_LIMITED_ROUTES` in
+  `common/rate-limit/wire.ts`): `POST /v1/auth/sign-up/email` →
+  SIGNUP_PER_HOUR_PER_IP; `POST /v1/auth/sign-in/email` → per-IP
+  SIGNIN_PER_15MIN_PER_IP then per-email SIGNIN_PER_15MIN_PER_EMAIL (IP gate
+  first so an exhausted IP bucket never consumes per-email slots);
+  `POST /v1/auth/request-password-reset` → per-email RESET_PER_HOUR_PER_EMAIL
+  (tighter limit first) then per-IP RESET_PER_HOUR_PER_IP; `GET
+  /v1/auth/session` → SESSION_PER_MINUTE_PER_IP. Better Auth's
+  `/request-password-reset` is the same endpoint as `/forget-password`
+  (spec'd "reset request"); `/reset-password` completion is NOT limited (the
+  single-use token is the brute-force control there).
+- **Key namespaces:** `signup:ip:<ip>`, `signin:ip:<ip>`,
+  `signin:email:<email>`, `reset:email:<email>`, `reset:ip:<ip>`,
+  `session:ip:<ip>` via `keyFor`; emails normalized (trim + lowercase) in the
+  guard, IPs via `deriveClientIp`/`normalizeIp`.
+- **Test isolation:** the shared auth fixture disables the guard
+  (`rateLimits: { enabled: false }`) so pre-existing suites keep their
+  request budgets; the spec limits are exercised end-to-end by
+  `test/auth-rate-limit.test.ts` (per-route boundaries, per-IP vs per-email
+  independence, Retry-After decay, spoof rotation) and
+  `test/trusted-ip-rewrite.test.ts` — the real browser → `next dev` `/v1/*`
+  rewrite → NestJS hop with `TRUSTED_PROXY_COUNT` 0 and 1 phases asserting
+  what Nest derives (non-production `x-derived-client-ip` hop diagnostics)
+  and that spoofed forwarded headers cannot change it.
+- **Password reset flow:** Better Auth `emailAndPassword` with
+  `sendResetPassword` (through the shared `EmailProvider` port — mail sink
+  locally), `resetPasswordTokenExpiresIn: 3600` (single-use:
+  `consumeVerificationValue` deletes the `reset-password:<token>` row on
+  first redemption), `revokeSessionsOnPasswordReset: true`, and the shared
+  12–128 password policy. The request endpoint answers the same generic
+  `{ status: true, message }` body for known and unknown addresses (Better
+  Auth hashes a dummy lookup on miss); the UI renders ONE shared i18n key
+  (`auth.enumerationSafeResponse`). Coverage:
+  `apps/api/test/auth-reset.test.ts`.

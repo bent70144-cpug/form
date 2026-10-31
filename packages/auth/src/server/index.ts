@@ -39,6 +39,23 @@ import type { EmailProvider } from "./email/types";
  * - `trustedOrigins` = APP_ORIGIN; the global Nest Origin guard uses the
  *   same value (spec: "Better Auth's trusted origins are set to the app
  *   origin").
+ *
+ * Ticket 04 (password reset) settings:
+ * - `emailAndPassword.sendResetPassword` delivers the reset email through
+ *   the SAME `EmailProvider` port (i18n-resolved subject/body; the token
+ *   only ever appears inside the message, never in logs).
+ * - `resetPasswordTokenExpiresIn: 3600` — the single-use reset token lives
+ *   exactly one hour (spec: "A reset token is single-use and expires after
+ *   one hour"). Better Auth stores it as a `reset-password:<token>`
+ *   verification row and `consumeVerificationValue` deletes it on use, so a
+ *   token cannot be redeemed twice.
+ * - `revokeSessionsOnPasswordReset: true` — completing a reset deletes ALL
+ *   of the user's sessions before the credential write (spec: "completing a
+ *   reset revokes all existing sessions").
+ * - The reset request endpoint answers the SAME generic 200 body whether or
+ *   not the address exists (Better Auth hashes a dummy lookup on miss —
+ *   enumeration-safe), so the UI can render one shared i18n key
+ *   (`auth.enumerationSafeResponse`).
  */
 export interface CreateAuthOptions {
   databaseUrl: string;
@@ -56,6 +73,14 @@ export interface CreateAuthOptions {
 /** Session lifetime: seven days, refreshed on activity at most once a day. */
 export const SESSION_EXPIRES_IN_SECONDS = 7 * 24 * 60 * 60; // 604800
 export const SESSION_UPDATE_AGE_SECONDS = 24 * 60 * 60; // 86400
+
+/**
+ * Password-reset token lifetime: one hour, single-use (spec: "A reset token
+ * is single-use and expires after one hour"). Better Auth stores the token
+ * as a `reset-password:<token>` verification row with this expiry and
+ * deletes the row on first redemption.
+ */
+export const RESET_TOKEN_EXPIRES_IN_SECONDS = 60 * 60; // 3600
 
 export function createAuth(options: CreateAuthOptions) {
   const emailProvider =
@@ -79,6 +104,24 @@ export function createAuth(options: CreateAuthOptions) {
       autoSignIn: false,
       minPasswordLength: PASSWORD_MIN_LENGTH,
       maxPasswordLength: PASSWORD_MAX_LENGTH,
+      // Ticket 04: single-use reset token, one-hour expiry (spec-pinned
+      // value; Better Auth's default happens to be the same 3600 s but the
+      // contract must not drift silently).
+      resetPasswordTokenExpiresIn: RESET_TOKEN_EXPIRES_IN_SECONDS,
+      // Ticket 04: completing a reset revokes every session of the user.
+      revokeSessionsOnPasswordReset: true,
+      sendResetPassword: async ({ user, url, token }) => {
+        // The subject/body text is resolved from the i18n catalog; the URL
+        // (which contains the reset token) is never logged.
+        await emailProvider.sendPasswordResetEmail({
+          to: user.email,
+          subject: t("auth.email.resetSubject"),
+          text: t("auth.email.resetBody", { name: user.name, url }),
+          url,
+          token,
+          user: { id: user.id, email: user.email, name: user.name },
+        });
+      },
     },
     emailVerification: {
       sendOnSignUp: true,
