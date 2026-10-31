@@ -8,8 +8,12 @@
  *   - web   → only public variables + the internal API URL. NEVER DATABASE_URL,
  *             auth secrets, or the migrator URL (enforced by a hard check that
  *             refuses to spawn the child if a forbidden key would be present).
- *   - api   → pooled app_user DATABASE_URL + APP_ORIGIN. No migrator URL.
- *   - worker→ worker_user URL.
+ *   - api   → pooled app_user DATABASE_URL + APP_ORIGIN + BETTER_AUTH_SECRET.
+ *             No migrator URL.
+ *   - worker→ worker_user URL (direct connection, pg-boss heartbeat).
+ *
+ * Ticket 02 (alpha topology spike): the web child also receives API_INTERNAL_URL
+ * so next.config can build the /v1/* rewrite toward the NestJS internal port.
  *
  * In `--dev` mode it also boots the embedded-postgres substitute (if nothing is
  * listening on 5433), runs the one-time admin bootstrap and the migrations
@@ -52,7 +56,13 @@ export const ROLE_ALLOWLISTS = {
     "LOG_LEVEL",
     "NEXT_TELEMETRY_DISABLED",
   ],
-  api: ["PORT", "DATABASE_URL", "APP_ORIGIN", "LOG_LEVEL"],
+  api: [
+    "PORT",
+    "DATABASE_URL",
+    "APP_ORIGIN",
+    "BETTER_AUTH_SECRET",
+    "LOG_LEVEL",
+  ],
   worker: ["WORKER_DATABASE_URL", "LOG_LEVEL", "HEARTBEAT_INTERVAL_MS"],
   sink: ["SMTP_PORT", "SINK_HTTP_PORT"],
 };
@@ -144,6 +154,9 @@ export function devDefaults(env = process.env) {
   const migratorPassword = env.DEV_MIGRATOR_PASSWORD ?? "dev-migrator-pw";
   const appUserPassword = env.DEV_APP_USER_PASSWORD ?? "dev-app-user-pw";
   const workerPassword = env.DEV_WORKER_PASSWORD ?? "dev-worker-pw";
+  // Dev-only Better Auth secret. Production value comes from the Render
+  // environment (API child only — never the web child).
+  const betterAuthSecret = env.BETTER_AUTH_SECRET ?? "dev-only-better-auth-secret";
   const webPort = env.WEB_PORT ?? "3000";
   const apiPort = env.API_PORT ?? "4000";
   return {
@@ -168,6 +181,7 @@ export function devDefaults(env = process.env) {
     workerPassword,
     webPort,
     apiPort,
+    betterAuthSecret,
     appOrigin: env.APP_ORIGIN ?? `http://localhost:${webPort}`,
     apiInternalUrl: env.API_INTERNAL_URL ?? `http://127.0.0.1:${apiPort}`,
   };
@@ -270,6 +284,7 @@ async function dev() {
       PORT: d.apiPort,
       DATABASE_URL: d.appDatabaseUrl,
       APP_ORIGIN: d.appOrigin,
+      BETTER_AUTH_SECRET: d.betterAuthSecret,
       LOG_LEVEL: process.env.LOG_LEVEL ?? "info",
     }),
   });
