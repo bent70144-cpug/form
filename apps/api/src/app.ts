@@ -30,6 +30,8 @@ export async function createApiApp(
 ): Promise<{
   nestApp: NestExpressApplication;
   expressApp: Express;
+  /** The DB-backed Better Auth instance (server-side revocation, admin flows). */
+  auth: ReturnType<typeof createAuth>;
 }> {
   const auth = createAuth({
     databaseUrl: env.DATABASE_URL,
@@ -54,5 +56,5 @@ export async function createApiApp(
   expressApp.use(mountBetterAuth(auth));
 
   await nestApp.init();
-  return { nestApp, expressApp };
+  return { nestApp, expressApp, auth };
 }

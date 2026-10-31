@@ -1,4 +1,4 @@
-import { Controller, Get, Post, UseGuards } from "@nestjs/common";
+import { Controller, Get, HttpCode, Post, UseGuards } from "@nestjs/common";
 import {
   CurrentSession,
   EmailVerifiedGuard,
@@ -28,6 +28,7 @@ export class VerifiedProbeController {
 
   @RequireVerifiedEmail()
   @Post("verified")
+  @HttpCode(200)
   post(@CurrentSession() session: AuthSession | undefined) {
     return { ok: true, via: "POST", userId: session?.userId };
   }

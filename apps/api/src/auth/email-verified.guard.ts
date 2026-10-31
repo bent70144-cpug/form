@@ -48,9 +48,12 @@ interface AuthenticatedRequest {
 
 @Injectable()
 export class EmailVerifiedGuard implements CanActivate {
+  // Explicit @Inject for BOTH params: vitest/esbuild does not emit
+  // `design:paramtypes` (tsc production build does) — self-declared deps
+  // keep constructor DI working in both pipelines.
   constructor(
     @Inject(AUTH) private readonly auth: Auth,
-    private readonly reflector: Reflector,
+    @Inject(Reflector) private readonly reflector: Reflector,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {

@@ -26,6 +26,7 @@
   },
   "devDependencies": {
     "@form/config": "workspace:*",
+    "@swc/core": "^1.16.21",
     "@types/express": "^5.0.1",
     "@types/node": "^22.10.2",
     "@types/pg": "^8.11.10",
@@ -34,6 +35,7 @@
     "supertest": "^7.1.4",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
+    "unplugin-swc": "^2.0.0",
     "vitest": "^2.1.8"
   }
 }

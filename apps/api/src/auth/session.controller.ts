@@ -1,4 +1,4 @@
-import { Controller, Get, Req, Res } from "@nestjs/common";
+import { Controller, Get, Inject, Req, Res } from "@nestjs/common";
 import type { Request, Response } from "express";
 import { SessionService } from "./session.service";
 
@@ -19,7 +19,13 @@ import { SessionService } from "./session.service";
  */
 @Controller("auth")
 export class SessionController {
-  constructor(private readonly sessions: SessionService) {}
+  // Explicit @Inject: the vitest/esbuild pipeline does not emit
+  // `design:paramtypes`, so constructor DI needs self-declared deps
+  // (the tsc production build emits both).
+  constructor(
+    @Inject(SessionService)
+    private readonly sessions: SessionService,
+  ) {}
 
   @Get("session")
   async session(@Req() req: Request, @Res() res: Response): Promise<void> {
