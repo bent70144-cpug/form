@@ -14,6 +14,7 @@ import {
   OUTBOX_DISPATCH_JOB,
   startWorker,
 } from "../src/index";
+import { grantPgBossRuntimeRole } from "@form/queue";
 
 /**
  * Ticket 05 dispatcher slice — worker end-to-end against real Postgres:
@@ -41,16 +42,10 @@ beforeAll(async () => {
   adminClient = new Client({ connectionString: urls.adminUrl });
   await adminClient.connect();
 
-  // pgboss DDL as the migrator + DML-only runtime grants (worker_user).
+  // pgboss DDL as the migrator + DML-only runtime grants (worker_user) —
+  // the same dev/test bootstrap path used by the queue package suites.
   await installPgBossSchema(testRoleUrl("migrator", SCRATCH_DB));
-  for (const sql of [
-    `GRANT USAGE ON SCHEMA pgboss TO worker_user`,
-    `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA pgboss TO worker_user`,
-    `GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA pgboss TO worker_user`,
-    `GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA pgboss TO worker_user`,
-  ]) {
-    await adminClient.query(sql);
-  }
+  await grantPgBossRuntimeRole(urls.adminUrl);
 
   appPool = createPool(urls.appUserUrl, { max: 2 });
 }, 120_000);
