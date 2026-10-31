@@ -7,10 +7,7 @@ import {
   UseInterceptors,
 } from "@nestjs/common";
 import type { Response } from "express";
-import {
-  bootstrapResponseSchema,
-  type BootstrapResponse,
-} from "@form/contracts";
+import { bootstrapResponseSchema, type BootstrapResponse } from "@form/contracts";
 import {
   CurrentSession,
   EmailVerifiedGuard,

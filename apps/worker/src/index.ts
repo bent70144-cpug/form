@@ -3,7 +3,6 @@ import {
   createOutboxDispatcher,
   intervalCron,
   DEFAULT_DISPATCH_INTERVAL_MS,
-  type OutboxDispatcher,
 } from "./outbox/dispatcher";
 import { defaultOutboxHandlers } from "./outbox/handlers";
 

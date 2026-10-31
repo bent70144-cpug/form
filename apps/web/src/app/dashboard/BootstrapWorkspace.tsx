@@ -28,7 +28,6 @@ export default function BootstrapWorkspace() {
     if (started.current) return;
     started.current = true;
     void bootstrap();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function bootstrap() {

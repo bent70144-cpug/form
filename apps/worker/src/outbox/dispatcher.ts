@@ -266,9 +266,10 @@ export async function createOutboxDispatcher(
         await boss.createQueue(OUTBOX_DISPATCH_QUEUE);
       }
       await boss.work(OUTBOX_DISPATCH_QUEUE, async (jobs) => {
-        for (const job of jobs) {
-          await sweep();
-        }
+        // Each scheduled job drains the whole outbox (the job is the tick;
+        // per-job payloads carry no data).
+        void jobs;
+        await sweep();
       });
       await boss.schedule(OUTBOX_DISPATCH_QUEUE, cron);
       options.logger?.info({ cron, dispatchIntervalMs }, "outbox.dispatcher_started");
