@@ -10,13 +10,13 @@ import path from "node:path";
  * (APP_PACKAGE_PATTERN): this test scans every package source file for
  * imports of an app specifier or a relative path escaping into apps/.
  */
-const REPO_ROOT = path.resolve(import.meta.dirname, "../..");
+const REPO_ROOT = path.resolve(import.meta.dirname, "../../..");
 const PACKAGES_DIR = path.join(REPO_ROOT, "packages");
 const APP_SPECIFIERS = ["@form/web", "@form/api", "@form/worker"];
 
 const SOURCE_RE = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/;
 
-function* walk(dir) {
+function* walk(dir: string): Generator<string> {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (entry.name === "node_modules" || entry.name === "dist") continue;
     const full = path.join(dir, entry.name);
@@ -38,6 +38,7 @@ describe("package dependency boundaries", () => {
         const source = fs.readFileSync(file, "utf8");
         for (const match of source.matchAll(IMPORT_RE)) {
           const spec = match[1];
+          if (!spec) continue;
           if (APP_SPECIFIERS.some((a) => spec === a || spec.startsWith(`${a}/`))) {
             violations.push(`${path.relative(REPO_ROOT, file)} -> ${spec}`);
           }
@@ -56,7 +57,7 @@ describe("package dependency boundaries", () => {
         const source = fs.readFileSync(file, "utf8");
         for (const match of source.matchAll(IMPORT_RE)) {
           const spec = match[1];
-          if (!spec.startsWith(".")) continue;
+          if (!spec || !spec.startsWith(".")) continue;
           const resolved = path.resolve(path.dirname(file), spec);
           if (!resolved.startsWith(PACKAGES_DIR + path.sep)) {
             violations.push(`${path.relative(REPO_ROOT, file)} -> ${spec}`);

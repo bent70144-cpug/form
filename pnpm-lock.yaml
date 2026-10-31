@@ -33,6 +33,87 @@ importers:
         specifier: ^8.19.0
         version: 8.72.1(eslint@9.39.5)(typescript@5.9.3)
 
+  apps/api:
+    dependencies:
+      '@form/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@form/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@form/i18n':
+        specifier: workspace:*
+        version: link:../../packages/i18n
+      pg:
+        specifier: ^8.13.1
+        version: 8.23.1
+      pino:
+        specifier: ^9.6.0
+        version: 9.14.0
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.5
+      '@types/pg':
+        specifier: ^8.11.10
+        version: 8.23.1
+      tsx:
+        specifier: ^4.19.2
+        version: 4.23.15
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.5)
+
+  apps/web:
+    dependencies:
+      '@form/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@form/i18n':
+        specifier: workspace:*
+        version: link:../../packages/i18n
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.5
+      tsx:
+        specifier: ^4.19.2
+        version: 4.23.15
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.5)
+
+  apps/worker:
+    dependencies:
+      '@form/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@form/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
+      pino:
+        specifier: ^9.6.0
+        version: 9.14.0
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.5
+      tsx:
+        specifier: ^4.19.2
+        version: 4.23.15
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.5)
+
   packages/auth:
     dependencies:
       zod:

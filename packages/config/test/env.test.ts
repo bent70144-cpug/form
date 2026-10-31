@@ -5,6 +5,7 @@ import {
   bootstrapEnvSchema,
   loadEnv,
   migratorEnvSchema,
+  webEnvSchema,
   workerEnvSchema,
 } from "../src/env";
 
@@ -75,5 +76,24 @@ describe("loadEnv", () => {
       WORKER_PASSWORD: "worker-password",
     });
     expect(env.APP_USER_PASSWORD).toBe("app-user-password");
+  });
+
+  it("validates the web environment (public variables only)", () => {
+    const env = loadEnv(webEnvSchema, {
+      PORT: "3000",
+      APP_ORIGIN: "http://localhost:3000",
+      API_INTERNAL_URL: "http://127.0.0.1:4000",
+    });
+    expect(env.PORT).toBe(3000);
+    expect(env.API_INTERNAL_URL).toBe("http://127.0.0.1:4000");
+  });
+
+  it("rejects a web environment with a non-URL internal API value", () => {
+    expect(() =>
+      loadEnv(webEnvSchema, {
+        APP_ORIGIN: "http://localhost:3000",
+        API_INTERNAL_URL: "not-a-url",
+      }),
+    ).toThrow(EnvValidationError);
   });
 });

@@ -55,13 +55,13 @@ describe("dev SMTP sink (Mailpit substitute)", () => {
     await sendMail(sink.smtpPort, {
       from: "noreply@form.test",
       to: "user@example.com",
-      body: "Subject: Verify your email\r\n\r\ntoken: abc123",
+      body: "Subject: Verify your email\r\n\r\ntoken: abc123\r\n.",
     });
     const res = await fetch(`http://127.0.0.1:${sink.httpPort}/dev/mailbox`);
     expect(res.status).toBe(200);
     const body = (await res.json());
     expect(body.messages).toHaveLength(1);
-    expect(body.messages[0].from).toBe("noreply@form.test");
+    expect(body.messages[0].from).toBe("<noreply@form.test>"); // envelope kept as sent
     expect(body.messages[0].to).toContain("<user@example.com>");
     expect(body.messages[0].raw).toContain("Verify your email");
   });

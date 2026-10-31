@@ -4,7 +4,7 @@
  * (docs/adr/0001-local-infra-substitutes.md). Zero dependencies.
  *
  * - SMTP server on SMTP_PORT (default 1025): accepts any mail and stores it.
- * - REST endpoint on SINK_HTTP_PORT (default 5434):
+ * - REST endpoint on SINK_HTTP_PORT (default 8025, Mailpit's native UI/API port):
  *     GET    /dev/mailbox  → { messages: [...] }
  *     DELETE /dev/mailbox  → clears the box
  *
@@ -15,7 +15,7 @@
 import net from "node:net";
 import http from "node:http";
 
-export function createMailSink({ smtpPort = 1025, httpPort = 5434 } = {}) {
+export function createMailSink({ smtpPort = 1025, httpPort = 8025 } = {}) {
   const messages = [];
   let nextId = 1;
 
@@ -38,10 +38,18 @@ export function createMailSink({ smtpPort = 1025, httpPort = 5434 } = {}) {
 
     socket.on("data", (chunk) => {
       buffer += chunk.toString("utf8");
-      let idx;
-      while ((idx = buffer.indexOf("\r\n")) >= 0 || (idx = buffer.indexOf("\n")) >= 0) {
+      for (;;) {
+        // Split on CRLF (2 bytes) or bare LF (1 byte); slicing must consume
+        // the whole separator or the next line gains a stray leading "\n".
+        let idx = buffer.indexOf("\r\n");
+        let sep = 2;
+        if (idx < 0) {
+          idx = buffer.indexOf("\n");
+          sep = 1;
+        }
+        if (idx < 0) break;
         const rawLine = buffer.slice(0, idx).replace(/\r$/, "");
-        buffer = buffer.slice(idx + 1);
+        buffer = buffer.slice(idx + sep);
         if (mode === "data") {
           if (rawLine === ".") {
             messages.push({
@@ -114,7 +122,7 @@ export function createMailSink({ smtpPort = 1025, httpPort = 5434 } = {}) {
   let smtpAddress = null;
   let httpAddress = null;
 
-  return {
+  const api = {
     smtpPort,
     httpPort,
     messages: () => messages.map((m) => ({ ...m })),
@@ -135,10 +143,10 @@ export function createMailSink({ smtpPort = 1025, httpPort = 5434 } = {}) {
           resolve();
         });
       });
-      return {
-        smtpPort: smtpAddress?.port,
-        httpPort: httpAddress?.port,
-      };
+      // Reflect the actually-bound ports (port 0 = ephemeral) on the handle.
+      api.smtpPort = smtpAddress?.port ?? api.smtpPort;
+      api.httpPort = httpAddress?.port ?? api.httpPort;
+      return { smtpPort: api.smtpPort, httpPort: api.httpPort };
     },
     async stop() {
       await Promise.all([
@@ -147,6 +155,7 @@ export function createMailSink({ smtpPort = 1025, httpPort = 5434 } = {}) {
       ]);
     },
   };
+  return api;
 }
 
 const isMain =
@@ -155,7 +164,7 @@ const isMain =
 if (isMain) {
   const sink = createMailSink({
     smtpPort: Number(process.env.SMTP_PORT ?? 1025),
-    httpPort: Number(process.env.SINK_HTTP_PORT ?? 5434),
+    httpPort: Number(process.env.SINK_HTTP_PORT ?? 8025),
   });
   sink
     .start()
