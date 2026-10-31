@@ -1,0 +1,35 @@
+# Committed for environments that have Docker (spec: local dev uses Postgres and Mailpit).
+# The default local path in THIS repo does not require Docker: the dev supervisor boots the
+# embedded-postgres substitute and a Node SMTP sink (see docs/adr/0001-local-infra-substitutes.md
+# and the README "Local development without Docker" section).
+#
+# Usage: docker compose up -d
+services:
+  postgres:
+    image: postgres:17-alpine
+    command: ["postgres", "-c", "log_min_error_statement=error"]
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -p 5432"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  mailpit:
+    image: axllent/mailpit:latest
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    ports:
+      - "1025:1025" # SMTP
+      - "5434:8025" # Web UI / REST API
+
+volumes:
+  postgres-data:
