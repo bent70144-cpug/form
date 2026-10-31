@@ -7,6 +7,15 @@ import {
   sessionResponseSchema,
   workspaceRefSchema,
 } from "./schemas/workspace";
+import {
+  createFormRequestSchema,
+  createFormResponseSchema,
+  formDetailSchema,
+  formSummarySchema,
+  listFormsResponseSchema,
+  renameFormRequestSchema,
+  renameFormResponseSchema,
+} from "./schemas/form";
 
 /**
  * OpenAPI 3.1 document generated from the shared Zod contracts (spec: "a
@@ -30,6 +39,11 @@ export function buildOpenApiDocument(): Record<string, unknown> {
       {
         name: "workspaces",
         description: "Workspace bootstrap and tenant context",
+      },
+      {
+        name: "forms",
+        description:
+          "Form create/list/read/rename in the active workspace (draft save arrives with ticket 07)",
       },
     ],
     paths: {
@@ -155,6 +169,205 @@ export function buildOpenApiDocument(): Record<string, unknown> {
           },
         },
       },
+      "/v1/forms": {
+        post: {
+          operationId: "createForm",
+          tags: ["forms"],
+          summary:
+            "Create a form in the active workspace under the default project",
+          description:
+            "Runs in the FULL workspace context (active workspace resolved server-side via `list_workspaces()`). The default project is found through `projects.is_default`, never by name. Also creates the form's mutable draft row (empty envelope, `draftVersion` 0) and writes the `form.created` audit row and outbox event in the same transaction.",
+          requestBody: {
+            required: false,
+            content: {
+              "application/json": {
+                schema: zodToJsonSchema(createFormRequestSchema, {
+                  target: "openApi3",
+                }),
+              },
+            },
+          },
+          responses: {
+            "201": {
+              description: "The created form with its draft (version 0)",
+              content: {
+                "application/json": {
+                  schema: zodToJsonSchema(createFormResponseSchema, {
+                    target: "openApi3",
+                  }),
+                },
+              },
+            },
+            "401": {
+              description: "Unauthenticated (problem details, `unauthenticated`)",
+              content: {
+                "application/problem+json": {
+                  schema: zodToJsonSchema(problemDetailsSchema, {
+                    target: "openApi3",
+                  }),
+                },
+              },
+            },
+            "403": {
+              description:
+                "Unverified email, origin mismatch, or no workspace yet (`forbidden`)",
+              content: {
+                "application/problem+json": {
+                  schema: zodToJsonSchema(problemDetailsSchema, {
+                    target: "openApi3",
+                  }),
+                },
+              },
+            },
+            "422": {
+              description: "Request body fails the contract (`validation_failed`)",
+              content: {
+                "application/problem+json": {
+                  schema: zodToJsonSchema(problemDetailsSchema, {
+                    target: "openApi3",
+                  }),
+                },
+              },
+            },
+          },
+        },
+        get: {
+          operationId: "listForms",
+          tags: ["forms"],
+          summary: "List the active workspace's forms, newest first",
+          description:
+            "Cursor pagination: `limit` defaults to 20 and is capped at 100; `nextCursor` is null on the last page. Ordered newest first by `(created_at, id)`.",
+          parameters: [
+            {
+              name: "limit",
+              in: "query",
+              required: false,
+              schema: { type: "integer", minimum: 1, maximum: 100, default: 20 },
+            },
+            {
+              name: "cursor",
+              in: "query",
+              required: false,
+              schema: { type: "string" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "One page of form summaries",
+              content: {
+                "application/json": {
+                  schema: zodToJsonSchema(listFormsResponseSchema, {
+                    target: "openApi3",
+                  }),
+                },
+              },
+            },
+            "401": {
+              description: "Unauthenticated (problem details, `unauthenticated`)",
+            },
+            "403": {
+              description:
+                "Unverified email or no workspace yet (`forbidden`)",
+            },
+            "422": {
+              description: "Invalid pagination parameters (`validation_failed`)",
+            },
+          },
+        },
+      },
+      "/v1/forms/{formId}": {
+        get: {
+          operationId: "getForm",
+          tags: ["forms"],
+          summary: "Read one form with its mutable draft",
+          description:
+            "Returns the form and its draft (envelope + integer `draftVersion`). Cross-workspace or unknown ids answer 404 (never 403) to avoid enumeration.",
+          parameters: [
+            {
+              name: "formId",
+              in: "path",
+              required: true,
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "The form with its draft",
+              content: {
+                "application/json": {
+                  schema: zodToJsonSchema(formDetailSchema, {
+                    target: "openApi3",
+                  }),
+                },
+              },
+            },
+            "401": {
+              description: "Unauthenticated (problem details, `unauthenticated`)",
+            },
+            "403": {
+              description:
+                "Unverified email or no workspace yet (`forbidden`)",
+            },
+            "404": {
+              description:
+                "Unknown id or a form of another workspace (`not_found`)",
+            },
+          },
+        },
+      },
+      "/v1/forms/{formId}/name": {
+        patch: {
+          operationId: "renameForm",
+          tags: ["forms"],
+          summary: "Rename the form's dashboard label",
+          description:
+            "Changes `forms.name` ONLY. The respondent-facing title lives in the draft schema envelope and is edited by the builder (ticket 08).",
+          parameters: [
+            {
+              name: "formId",
+              in: "path",
+              required: true,
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: zodToJsonSchema(renameFormRequestSchema, {
+                  target: "openApi3",
+                }),
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description: "The renamed form summary",
+              content: {
+                "application/json": {
+                  schema: zodToJsonSchema(renameFormResponseSchema, {
+                    target: "openApi3",
+                  }),
+                },
+              },
+            },
+            "401": {
+              description: "Unauthenticated (problem details, `unauthenticated`)",
+            },
+            "403": {
+              description:
+                "Unverified email or no workspace yet (`forbidden`)",
+            },
+            "404": {
+              description:
+                "Unknown id or a form of another workspace (`not_found`)",
+            },
+            "422": {
+              description: "Invalid name (`validation_failed`)",
+            },
+          },
+        },
+      },
     },
     components: {
       schemas: {
@@ -171,6 +384,21 @@ export function buildOpenApiDocument(): Record<string, unknown> {
           target: "openApi3",
         }),
         SessionResponse: zodToJsonSchema(sessionResponseSchema, {
+          target: "openApi3",
+        }),
+        FormSummary: zodToJsonSchema(formSummarySchema, {
+          target: "openApi3",
+        }),
+        FormDetail: zodToJsonSchema(formDetailSchema, {
+          target: "openApi3",
+        }),
+        CreateFormResponse: zodToJsonSchema(createFormResponseSchema, {
+          target: "openApi3",
+        }),
+        ListFormsResponse: zodToJsonSchema(listFormsResponseSchema, {
+          target: "openApi3",
+        }),
+        RenameFormResponse: zodToJsonSchema(renameFormResponseSchema, {
           target: "openApi3",
         }),
       },
