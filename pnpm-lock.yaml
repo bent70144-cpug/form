@@ -230,6 +230,10 @@ importers:
         version: 2.1.9(@types/node@22.20.5)
 
   packages/form-schema:
+    dependencies:
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
     devDependencies:
       typescript:
         specifier: ^5.7.2
