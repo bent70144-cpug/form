@@ -2,8 +2,15 @@
 /**
  * Local dev supervisor (spec: "Deployment and configuration").
  *
- * Starts web (Next.js), API (NestJS), the worker and the dev SMTP sink with an
- * EXPLICIT allowlisted environment per child process:
+ * Two modes:
+ *   --dev    boots EVERYTHING for local development: embedded Postgres, the
+ *            one-time admin bootstrap, migrations, the dev mail sink, then the
+ *            children (see below).
+ *   --serve  production children only (web/api/worker, built artifacts) — the
+ *            Render alpha start command; same allowlists, no local infra.
+ *
+ * Starts web (Next.js), API (NestJS), the worker and (in dev) the dev SMTP
+ * sink with an EXPLICIT allowlisted environment per child process:
  *
  *   - web   → only public variables + the internal API URL. NEVER DATABASE_URL,
  *             auth secrets, or the migrator URL (enforced by a hard check that
@@ -62,6 +69,18 @@ export const ROLE_ALLOWLISTS = {
     "APP_ORIGIN",
     "BETTER_AUTH_SECRET",
     "LOG_LEVEL",
+    // Production API surface (apps/api/src/env.ts) — server-side only, so the
+    // API child is the right place for them (ticket 12 runbook lists exactly
+    // these as the Render env). Never forwarded to the web child.
+    "EMAIL_PROVIDER",
+    "RESEND_API_KEY",
+    "EMAIL_FROM",
+    "SMTP_HOST",
+    "SMTP_PORT",
+    "TRUSTED_PROXY_COUNT",
+    "TRUSTED_PROXY_HEADERS",
+    "IP_HASH_SECRET",
+    "FORM_SUBMISSION_CAP",
   ],
   worker: ["WORKER_DATABASE_URL", "LOG_LEVEL", "HEARTBEAT_INTERVAL_MS"],
   sink: ["SMTP_PORT", "SINK_HTTP_PORT"],
@@ -69,7 +88,7 @@ export const ROLE_ALLOWLISTS = {
 
 /** Nothing matching this may ever reach the browser deployable. */
 export const FORBIDDEN_WEB_ENV_PATTERN =
-  /DATABASE_URL|PASSWORD|SECRET|TOKEN|MIGRATOR|ADMIN/i;
+  /DATABASE_URL|PASSWORD|SECRET|TOKEN|MIGRATOR|ADMIN|API_KEY/i;
 
 /**
  * Build the environment for a child process. For `web` this is a hard
@@ -338,6 +357,84 @@ async function dev() {
   process.on("SIGTERM", shutdown);
 }
 
+/**
+ * Production serve mode (`--serve`) — the Render alpha start command.
+ *
+ * The single Render service runs ONE supervisor process which spawns the same
+ * three children as dev mode, with the same per-child allowlists and the same
+ * fail-closed web check — but NO embedded Postgres, bootstrap, migrations, or
+ * mail sink (Neon holds the data, GitHub Actions owns migrations, email goes
+ * through the HTTPS provider). Children run their BUILT artifacts:
+ *
+ *   web    → `next start` (the Render build command runs `pnpm build` first)
+ *   api    → `tsx src/main.ts`
+ *   worker → `tsx src/index.ts`
+ *
+ * Required environment (the runbook lists exactly these; everything else is
+ * dropped by the allowlists): DATABASE_URL (pooled app_user), the migrator
+ * URL is FORBIDDEN here (GitHub Actions secret only).
+ */
+async function serve() {
+  const env = process.env;
+  const webPort = env.PORT ?? env.WEB_PORT ?? "3000";
+  const apiPort = env.API_PORT ?? "4000";
+  const d = devDefaults({ ...env, WEB_PORT: webPort, API_PORT: apiPort });
+
+  const missing = [
+    ["DATABASE_URL", env.DATABASE_URL],
+    ["WORKER_DATABASE_URL", env.WORKER_DATABASE_URL],
+    ["BETTER_AUTH_SECRET", env.BETTER_AUTH_SECRET],
+  ]
+    .filter(([, v]) => !v)
+    .map(([k]) => k);
+  if (missing.length > 0) {
+    process.stderr.write(
+      `[supervisor] --serve requires ${missing.join(", ")} — refusing to start\n`,
+    );
+    process.exit(1);
+  }
+
+  process.stdout.write(
+    `[supervisor] serving: web :${webPort} → api 127.0.0.1:${apiPort} (same allowlists as dev)\n`,
+  );
+
+  spawnChild("api", "pnpm", ["--filter", "@form/api", "start"], ROOT, {
+    ...buildChildEnv("api", {
+      ...env,
+      NODE_ENV: "production",
+      PORT: apiPort,
+      DATABASE_URL: d.appDatabaseUrl,
+      APP_ORIGIN: d.appOrigin,
+      BETTER_AUTH_SECRET: d.betterAuthSecret,
+      LOG_LEVEL: env.LOG_LEVEL ?? "info",
+    }),
+  });
+
+  spawnChild("worker", "pnpm", ["--filter", "@form/worker", "start"], ROOT, {
+    ...buildChildEnv("worker", {
+      ...env,
+      NODE_ENV: "production",
+      WORKER_DATABASE_URL: d.workerDatabaseUrl,
+      LOG_LEVEL: env.LOG_LEVEL ?? "info",
+    }),
+  });
+
+  spawnChild("web", "pnpm", ["--filter", "@form/web", "start"], ROOT, {
+    ...buildChildEnv("web", {
+      ...env,
+      NODE_ENV: "production",
+      PORT: webPort,
+      APP_ORIGIN: d.appOrigin,
+      API_INTERNAL_URL: d.apiInternalUrl,
+      API_INTERNAL_PORT: apiPort,
+      NEXT_TELEMETRY_DISABLED: "1",
+    }),
+  });
+
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
+}
+
 const isMain =
   process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
 if (isMain && process.argv.includes("--dev")) {
@@ -345,9 +442,16 @@ if (isMain && process.argv.includes("--dev")) {
     process.stderr.write(`[supervisor] ${err?.stack ?? err}\n`);
     process.exit(1);
   });
+} else if (isMain && process.argv.includes("--serve")) {
+  serve().catch((err) => {
+    process.stderr.write(`[supervisor] ${err?.stack ?? err}\n`);
+    process.exit(1);
+  });
 } else if (isMain) {
   process.stdout.write(
-    "Usage: node scripts/supervisor.mjs --dev\n(loads embedded Postgres + bootstrap + migrations + web/api/worker/sink)\n",
+    "Usage: node scripts/supervisor.mjs --dev | --serve\n" +
+      "  --dev    embedded Postgres + bootstrap + migrations + web/api/worker/sink (local development)\n" +
+      "  --serve  production children only (web/api/worker, built artifacts) — the Render start command\n",
   );
 }
 

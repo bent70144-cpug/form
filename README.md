@@ -58,7 +58,7 @@ explicitly allowlisted environments:
 | api (NestJS)                        | 4000        | Internal; pooled `app_user` connection                   |
 | worker                              | —           | Direct `worker_user` connection for pg-boss              |
 | Postgres 17 (embedded)              | 5433        | `postgres` superuser plays the one-time admin only       |
-| mail sink (SMTP / JSON mailbox API) | 1025 / 8025 | Verification mail in dev                                 |
+| mail sink (SMTP / JSON mailbox API) | 1025 / 5434 | Verification mail in dev                                 |
 
 In dev mode the supervisor fills every variable from
 `scripts/supervisor.mjs` (`devDefaults`), so no `.env` file is required.
@@ -107,7 +107,7 @@ Docker is not required (or assumed). Per
   least-privilege roles `migrator`, `app_user`, and `worker_user`, so RLS
   guarantees are never weakened — locally, in tests, or on Neon.
 - **Mailpit → Node SMTP sink**: `scripts/mail-sink.mjs` (SMTP on 1025, JSON
-  mailbox API on 8025 at `GET /dev/mailbox`). `docker-compose.yml` still ships
+  mailbox API on 5434 at `GET /dev/mailbox`). `docker-compose.yml` still ships
   Postgres + Mailpit for Docker-capable machines, but it is not the default
   path.
 - Neon/Render/email-provider steps are implemented as code, workflows, and
@@ -148,8 +148,20 @@ alpha topology spike (0003), rate limiting and trusted client-IP derivation
 
 The alpha deploys as a single Render web service backed by Neon Postgres.
 GitHub Actions runs migrations as the `migrator` **before** triggering the
-Render deploy hook; Render auto-deploy on push is disabled. The operational
-checklist, required secrets, and the smoke test are in
+Render deploy hook; Render auto-deploy on push is disabled.
+
+Before any deploy — and on every push to `main`/`integration/m0` in CI — the
+**local alpha smoke** proves the walking skeleton end-to-end:
+
+```sh
+pnpm smoke:alpha   # boots embedded PG + supervisor stack, drives the real
+                   # health → signup → verify → workspace → form → draft →
+                   # publish → public-form → session → submit loop over HTTP
+```
+
+The operational checklist (who holds each secret, the exact Render env
+allowlist, email-domain verification, cold-start measurement, and the manual
+live smoke on the alpha URL) is in
 [docs/RUNBOOK-deploy.md](docs/RUNBOOK-deploy.md); the workflows are
 [.github/workflows/ci.yml](.github/workflows/ci.yml) and
 [.github/workflows/deploy.yml](.github/workflows/deploy.yml).

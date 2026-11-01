@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   FORBIDDEN_WEB_ENV_PATTERN,
   ROLE_ALLOWLISTS,
+  SYSTEM_KEYS,
   buildChildEnv,
   devDefaults,
 } from "../../scripts/supervisor.mjs";
@@ -121,5 +122,110 @@ describe("supervisor child environment allowlist", () => {
     expect(web["BETTER_AUTH_SECRET"]).toBeUndefined();
     const api = buildChildEnv("api", { ...BASE, BETTER_AUTH_SECRET: d.betterAuthSecret });
     expect(api["BETTER_AUTH_SECRET"]).toBe(d.betterAuthSecret);
+  });
+
+  // --- ticket 12: migration/admin credentials never reach any child process ---
+
+  it("NEVER passes the migrator or admin URL to any child — they live only in the GitHub Actions migrate job", () => {
+    const hostile = {
+      ...BASE,
+      MIGRATOR_DATABASE_URL: "postgres://migrator:pw@host/db",
+      ADMIN_DATABASE_URL: "postgres://admin:pw@host/db",
+    };
+    for (const role of Object.keys(ROLE_ALLOWLISTS)) {
+      const env = buildChildEnv(role, hostile);
+      expect(env["MIGRATOR_DATABASE_URL"], role).toBeUndefined();
+      expect(env["ADMIN_DATABASE_URL"], role).toBeUndefined();
+    }
+    for (const [role, allow] of Object.entries(ROLE_ALLOWLISTS)) {
+      expect(allow, role).not.toContain("MIGRATOR_DATABASE_URL");
+      expect(allow, role).not.toContain("ADMIN_DATABASE_URL");
+    }
+  });
+
+  it("gives the worker NO secrets — only the worker_user URL, LOG_LEVEL and heartbeat tuning", () => {
+    const env = buildChildEnv("worker", {
+      ...BASE,
+      WORKER_DATABASE_URL: "postgres://worker_user:pw@host/db",
+      // everything else that exists in the deploy environment must not leak in
+      DATABASE_URL: "postgres://app_user:pw@host/db",
+      BETTER_AUTH_SECRET: "super-secret",
+      APP_ORIGIN: "http://localhost:3000",
+      RESEND_API_KEY: "re_secret",
+      IP_HASH_SECRET: "0123456789abcdef",
+      EMAIL_FROM: "noreply@example.com",
+      TRUSTED_PROXY_COUNT: "1",
+    });
+    expect(env["WORKER_DATABASE_URL"]).toContain("worker_user");
+    for (const forbidden of [
+      "BETTER_AUTH_SECRET",
+      "APP_ORIGIN",
+      "DATABASE_URL",
+      "RESEND_API_KEY",
+      "IP_HASH_SECRET",
+      "EMAIL_FROM",
+      "TRUSTED_PROXY_COUNT",
+      "MIGRATOR_DATABASE_URL",
+      "ADMIN_DATABASE_URL",
+    ]) {
+      expect(env[forbidden], forbidden).toBeUndefined();
+    }
+    // the worker env is EXACTLY system keys + its allowlist — nothing else
+    const allowed = new Set([
+      ...SYSTEM_KEYS,
+      "WORKER_DATABASE_URL",
+      "LOG_LEVEL",
+      "HEARTBEAT_INTERVAL_MS",
+    ]);
+    for (const key of Object.keys(env)) {
+      expect(allowed.has(key), key).toBe(true);
+    }
+  });
+
+  it("forwards the API's production email/proxy variables to the API child but never to the web child", () => {
+    const production = {
+      ...BASE,
+      EMAIL_PROVIDER: "resend",
+      RESEND_API_KEY: "re_live_key",
+      EMAIL_FROM: "noreply@example.com",
+      TRUSTED_PROXY_COUNT: "1",
+      IP_HASH_SECRET: "0123456789abcdef",
+      FORM_SUBMISSION_CAP: "1000",
+      SMTP_HOST: "127.0.0.1",
+      SMTP_PORT: "1025",
+    };
+    const api = buildChildEnv("api", production);
+    for (const key of Object.keys(production).filter((k) => !k.startsWith("NODE"))) {
+      expect(api[key], key).toBe(production[key]);
+    }
+    // The web child never sees ANY of them — the allowlist drops every key
+    // it does not name, so these are simply absent from the spawned env.
+    const web = buildChildEnv("web", production);
+    for (const key of [
+      "EMAIL_PROVIDER",
+      "RESEND_API_KEY",
+      "EMAIL_FROM",
+      "TRUSTED_PROXY_COUNT",
+      "IP_HASH_SECRET",
+      "FORM_SUBMISSION_CAP",
+      "SMTP_HOST",
+      "SMTP_PORT",
+    ]) {
+      expect(web[key], key).toBeUndefined();
+    }
+    // NEXT_PUBLIC_* forwarding cannot smuggle a secret into the browser
+    // deployable either: the fail-closed sweep refuses the spawn.
+    expect(() =>
+      buildChildEnv("web", { ...BASE, NEXT_PUBLIC_RESEND_API_KEY: "re_x" }),
+    ).toThrow(/forbidden environment keys/i);
+  });
+
+  it("treats any *API_KEY as forbidden for the web child (pattern sweep)", () => {
+    expect(FORBIDDEN_WEB_ENV_PATTERN.test("RESEND_API_KEY")).toBe(true);
+    // A NEXT_PUBLIC_-prefixed API key WOULD be forwarded to the browser build;
+    // the sweep must refuse the spawn instead.
+    expect(() =>
+      buildChildEnv("web", { ...BASE, NEXT_PUBLIC_STRIPE_API_KEY: "sk_live_x" }),
+    ).toThrow(/forbidden environment keys/i);
   });
 });

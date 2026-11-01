@@ -58,7 +58,11 @@ const USER_AGENT_MAX_CHARS = 512;
 export class PublicSessionService {
   constructor(
     @Inject(APP_DB_POOL) private readonly pool: Pool,
-    private readonly limiter: RateLimiter,
+    // Explicit @Inject: esbuild/tsx (dev + start pipelines) does not emit
+    // decorator type metadata — the codebase-wide DI pattern (see the forms
+    // controllers, WorkspaceService, PublicSubmissionsService). Without it
+    // the Nest dev runtime cannot resolve the RateLimiter at all.
+    @Inject(RateLimiter) private readonly limiter: RateLimiter,
     @Inject("PUBLIC_TRUSTED_IP_CONFIG") private readonly trustedIpConfig: TrustedIpConfig,
     @Inject("PUBLIC_IP_HASH_SECRET") private readonly ipHashSecret: string,
   ) {}
