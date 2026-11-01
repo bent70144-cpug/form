@@ -1,9 +1,9 @@
 /**
- * JSX compile note: the web tsconfig uses `jsx: "preserve"`, so Next/SWC
- * compiles this file with the automatic runtime, while the vitest/esbuild
- * pipeline falls back to the classic transform — the explicit
- * `import * as React` below satisfies BOTH compilers. No @jsx pragma is set:
- * Turbopack (Next 16 build) rejects pragmas under the automatic runtime.
+ * Explicit React namespace import: the web tsconfig uses `jsx: "preserve"`
+ * (Next/SWC compiles it with the automatic runtime) while the vitest/esbuild
+ * pipeline falls back to the classic transform; importing React keeps BOTH
+ * compilers pointing at the same element factory without source pragmas
+ * (Turbopack rejects `@jsx` when the automatic runtime is active).
  */
 import * as React from "react";
 import type { FormBlock } from "@form/contracts";
