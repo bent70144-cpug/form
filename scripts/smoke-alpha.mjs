@@ -355,7 +355,10 @@ async function main() {
         headers: { cookie },
       });
       expectStatus(session, 200, "session");
-      if (session.json?.user?.emailVerified !== true) {
+      // The API's session endpoint returns its own FLAT DTO
+      // ({userId, email, emailVerified, workspace}) — not better-auth's raw
+      // {user: {...}} shape (verified against GET /v1/auth/session output).
+      if (session.json?.emailVerified !== true) {
         fail("session does not report a verified email", session.text);
       }
       if (session.json?.workspace !== null) {
@@ -498,10 +501,20 @@ async function main() {
       if (response.json?.submitted !== true || !submissionId) {
         fail("submit did not return a receipt", response.text);
       }
-      // answers must validate against the pinned schema: missing required → 422
+      // answers must validate against the pinned schema: a FRESH session
+      // submitting a missing required answer → 422. (The session above is
+      // already completed — its idempotency gate returns the stored receipt
+      // with 200 BEFORE validation, which is the tested T10 contract.)
+      const fresh = await http("POST", `/v1/public/forms/${slug}/sessions`, {
+        baseUrl,
+        headers: { origin },
+      });
+      if (fresh.status !== 200) {
+        fail("fresh session for the invalid-answers probe failed", fresh.text);
+      }
       const invalid = await http("POST", "/v1/public/submissions", {
         baseUrl,
-        headers: { "x-form-session": sessionToken, origin },
+        headers: { "x-form-session": fresh.json?.token, origin },
         body: { answers: {} },
       });
       if (invalid.status !== 422 && invalid.status !== 409) {

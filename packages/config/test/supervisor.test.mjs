@@ -5,7 +5,7 @@ import {
   SYSTEM_KEYS,
   buildChildEnv,
   devDefaults,
-} from "../../scripts/supervisor.mjs";
+} from "../../../scripts/supervisor.mjs";
 
 const BASE = {
   PATH: "/usr/bin:/bin",

@@ -1,4 +1,4 @@
-import { Controller, HttpCode, Param, Post, Req, Res } from "@nestjs/common";
+import { Controller, HttpCode, Inject, Param, Post, Req, Res } from "@nestjs/common";
 import type { Request, Response } from "express";
 import {
   publicFormPublishedSchema,
@@ -47,7 +47,14 @@ function sendSubmitProblem(res: Response, error: SubmitProblemError): void {
 
 @Controller("public")
 export class PublicFormSessionController {
-  constructor(private readonly sessions: PublicSessionService) {}
+  // Explicit @Inject — tsx (dev/smoke pipeline) does not emit decorator type
+  // metadata (unlike the vitest SWC pipeline), so bare class-typed params
+  // resolve to `undefined` at runtime (the ticket-12 smoke caught this).
+  // Same pattern as every other controller in the codebase.
+  constructor(
+    @Inject(PublicSessionService)
+    private readonly sessions: PublicSessionService,
+  ) {}
 
   @Post("forms/:slug/sessions")
   @HttpCode(200)
@@ -90,7 +97,11 @@ export class PublicFormSessionController {
 
 @Controller("public")
 export class PublicSubmissionController {
-  constructor(private readonly submissions: PublicSubmissionsService) {}
+  // Explicit @Inject — same tsx decorator-metadata caveat as above.
+  constructor(
+    @Inject(PublicSubmissionsService)
+    private readonly submissions: PublicSubmissionsService,
+  ) {}
 
   @Post("submissions")
   @HttpCode(200)

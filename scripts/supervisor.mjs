@@ -162,6 +162,10 @@ function runScript(label, args, env) {
     if (result.stderr) process.stderr.write(result.stderr + "\n");
     process.exit(result.status ?? 1);
   }
+  // Proof the step ran: every non-empty stdout line (the bootstrap's
+  // "Roles created/aligned" report is exactly what you want to see).
+  const lines = (result.stdout ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
+  process.stdout.write(`[${label}] ok${lines.length ? `: ${lines.join(" | ")}` : ""}\n`);
   return result;
 }
 
@@ -173,6 +177,16 @@ export function devDefaults(env = process.env) {
   const migratorPassword = env.DEV_MIGRATOR_PASSWORD ?? "dev-migrator-pw";
   const appUserPassword = env.DEV_APP_USER_PASSWORD ?? "dev-app-user-pw";
   const workerPassword = env.DEV_WORKER_PASSWORD ?? "dev-worker-pw";
+  // A leaked non-postgres DATABASE_URL (e.g. a host-side `file:` URL from the
+  // surrounding sandbox/IDE) must NOT flow into the children: the pg driver
+  // would answer ECONNREFUSED long after a seemingly healthy boot. Only a
+  // real postgres URL is honored; anything else falls back to the dev default.
+  const isPostgresUrl = (v) =>
+    typeof v === "string" && (v.startsWith("postgres://") || v.startsWith("postgresql://"));
+  const appDatabaseUrlOverride = isPostgresUrl(env.DATABASE_URL) ? env.DATABASE_URL : undefined;
+  const adminDatabaseUrlOverride = isPostgresUrl(env.ADMIN_DATABASE_URL) ? env.ADMIN_DATABASE_URL : undefined;
+  const migratorDatabaseUrlOverride = isPostgresUrl(env.MIGRATOR_DATABASE_URL) ? env.MIGRATOR_DATABASE_URL : undefined;
+  const workerDatabaseUrlOverride = isPostgresUrl(env.WORKER_DATABASE_URL) ? env.WORKER_DATABASE_URL : undefined;
   // Dev-only Better Auth secret. Production value comes from the Render
   // environment (API child only — never the web child).
   const betterAuthSecret = env.BETTER_AUTH_SECRET ?? "dev-only-better-auth-secret";
@@ -184,16 +198,16 @@ export function devDefaults(env = process.env) {
     pgPassword,
     devDb,
     adminDatabaseUrl:
-      env.ADMIN_DATABASE_URL ??
+      adminDatabaseUrlOverride ??
       `postgres://${pgUser}:${pgPassword}@localhost:${pgPort}/${devDb}`,
     migratorDatabaseUrl:
-      env.MIGRATOR_DATABASE_URL ??
+      migratorDatabaseUrlOverride ??
       `postgres://migrator:${migratorPassword}@localhost:${pgPort}/${devDb}`,
     appDatabaseUrl:
-      env.DATABASE_URL ??
+      appDatabaseUrlOverride ??
       `postgres://app_user:${appUserPassword}@localhost:${pgPort}/${devDb}`,
     workerDatabaseUrl:
-      env.WORKER_DATABASE_URL ??
+      workerDatabaseUrlOverride ??
       `postgres://worker_user:${workerPassword}@localhost:${pgPort}/${devDb}`,
     migratorPassword,
     appUserPassword,
@@ -260,7 +274,10 @@ async function dev() {
     spawnChild(
       "pg",
       process.execPath,
-      [path.join(ROOT, "node_modules/.bin/tsx"), "packages/database/src/scripts/start-embedded.ts"],
+      // node_modules/.bin/tsx is a #!/bin/sh wrapper — it cannot be executed
+      // via process.execPath (node would try to parse the shell shim as JS).
+      // Use the real JS CLI entry directly instead.
+      [path.join(ROOT, "node_modules/tsx/dist/cli.mjs"), "packages/database/src/scripts/start-embedded.ts"],
       ROOT,
       { ...process.env },
     );
@@ -289,6 +306,32 @@ async function dev() {
     ...process.env,
     MIGRATOR_DATABASE_URL: d.migratorDatabaseUrl,
   });
+
+  // 3.25 Better Auth DDL for the `auth` schema (the ticket-12 smoke found the
+  //     dev flow missing this: migrations own `app`, but `auth` tables are
+  //     Better Auth's generated DDL — the test fixture applied them at test
+  //     time, production's migrator step owns them; dev had neither).
+  //     spawnSync with --filter (runScript's plain `pnpm exec` can't filter).
+  const authDdl = spawnSync(
+    "pnpm",
+    ["--filter", "@form/api", "exec", "tsx", "src/scripts/ensure-auth-tables.ts"],
+    {
+      cwd: ROOT,
+      env: {
+        ...process.env,
+        ADMIN_DATABASE_URL: d.adminDatabaseUrl,
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+      encoding: "utf8",
+    },
+  );
+  if (authDdl.status !== 0) {
+    process.stderr.write(
+      `[auth-ddl] failed (exit ${authDdl.status})\n${authDdl.stderr ?? ""}\n`,
+    );
+    process.exit(authDdl.status ?? 1);
+  }
+  process.stdout.write(`[auth-ddl] ok\n`);
 
   // 3.5 pg-boss schema DDL as the migrator + worker_user DML grants
   //     (dev companion step; production: a migration owns both — ADR 0003).
