@@ -1,4 +1,4 @@
-# Alpha deploy pipeline (ticket 02 — spec "Deployment and configuration").
+# Alpha deploy pipeline (tickets 02 + 12 — spec "Deployment and configuration").
 #
 # Order is load-bearing: migrations run FIRST (as the `migrator`, from a GitHub
 # Actions secret), and only then is the Render deploy hook triggered. Render
@@ -15,11 +15,25 @@
 #                           (Neon: pooled URL with ?pgbouncer=true is NOT used
 #                           here — migrations and pg-boss use the DIRECT URL)
 #   RENDER_DEPLOY_HOOK_URL  the deploy hook URL from the Render service
+#
+# Jobs:
+#   migrate      (main only)      apply migrations as the `migrator` role
+#   deploy       (main only)      trigger the Render deploy hook AFTER migrate
+#   smoke-local  (main + integration/m0)  the LOCAL alpha smoke on a fresh
+#                runner: embedded Postgres + supervisor + the full
+#                health → signup → verify → workspace → form → draft →
+#                publish → submit → receipt loop over HTTP
+#                (scripts/smoke-alpha.mjs). This proves the walking skeleton
+#                end-to-end in CI on every integration push.
+#
+# The RENDER smoke (signup → publish → submit → review on the live alpha URL)
+# is MANUAL — it needs real email delivery and the deployed origin; run the
+# checklist in docs/RUNBOOK-deploy.md after each live deploy.
 name: deploy
 
 on:
   push:
-    branches: [main]
+    branches: [main, integration/m0]
   workflow_dispatch:
 
 concurrency:
@@ -29,6 +43,7 @@ concurrency:
 jobs:
   migrate:
     name: Run migrations (migrator role)
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -54,6 +69,7 @@ jobs:
 
   deploy:
     name: Trigger Render deploy hook
+    if: github.ref == 'refs/heads/main'
     needs: migrate
     runs-on: ubuntu-latest
     steps:
@@ -66,5 +82,34 @@ jobs:
         env:
           RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
 
-      # Smoke test is a later milestone ("The final deployment milestone is a
-      # smoke test, not the first deploy") — intentionally absent here.
+      # The live RENDER smoke stays MANUAL (needs real email + the deployed
+      # origin): follow docs/RUNBOOK-deploy.md "Live smoke checklist" after the
+      # deploy finishes. The automated smoke is smoke-local below.
+
+  smoke-local:
+    name: Local alpha smoke (walking skeleton)
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/integration/m0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: smoke-local-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Boots embedded Postgres + the supervisor stack (web/api/worker/sink)
+      # and drives the real loop over HTTP; exits non-zero on any failure.
+      - name: Run the local alpha smoke
+        run: pnpm smoke:alpha
