@@ -71,6 +71,42 @@ export const en = {
         optional: "Optional",
       },
     },
+    /**
+     * Builder strings (ticket 08). Every label, hint, saved-state text and
+     * error the builder renders is looked up here — no hardcoded copy.
+     * Schema-engine issue codes resolve through `errors.schemaIssues` above.
+     */
+    builder: {
+      editorLabel: "Form builder",
+      schemaTitleLabel: "Respondent-facing title",
+      schemaTitleHint: "People filling in this form will see this title.",
+      titleLabel: "Title",
+      labelLabel: "Question label",
+      descriptionLabel: "Description (optional)",
+      placeholderLabel: "Placeholder (optional)",
+      requiredLabel: "Required",
+      addBlockHeading: "Add a block",
+      add: {
+        welcome: "Add welcome block",
+        shortText: "Add short text block",
+        longText: "Add long text block",
+        ending: "Add ending block",
+      },
+      moveUp: "Move {name} up",
+      moveDown: "Move {name} down",
+      deleteBlock: "Delete {name}",
+      dragHandle: "Drag handle for {name}",
+      status: {
+        saved: "All changes saved",
+        saving: "Saving…",
+        error: "Saving failed. Edit the form again to retry.",
+        conflict: "This form was saved from another tab or session.",
+        conflictHint:
+          "Reload the page to continue editing. Changes made here since the conflict are not saved.",
+        reload: "Reload",
+      },
+      validationHeading: "Fix these issues before the draft can save:",
+    },
   },
   auth: {
     signIn: {

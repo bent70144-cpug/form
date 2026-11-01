@@ -25,4 +25,19 @@ describe("i18n", () => {
     // The 429 problem title key referenced by the rateLimited() factory.
     expect(t("errors.rateLimited.title")).toContain("Too many");
   });
+
+  it("ships the ticket-08 builder keys (all builder copy is catalog-driven)", () => {
+    expect(t("dashboard.builder.status.saved")).toContain("saved");
+    expect(t("dashboard.builder.status.saving")).toContain("Saving");
+    expect(t("dashboard.builder.moveUp", { name: "Short text" })).toBe(
+      "Move Short text up",
+    );
+    expect(t("dashboard.builder.deleteBlock", { name: "Ending" })).toBe(
+      "Delete Ending",
+    );
+    expect(typeof en.dashboard.builder.schemaTitleLabel).toBe("string");
+    expect(typeof en.dashboard.builder.validationHeading).toBe("string");
+    expect(typeof en.dashboard.builder.add.welcome).toBe("string");
+    expect(typeof en.dashboard.builder.status.reload).toBe("string");
+  });
 });

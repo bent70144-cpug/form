@@ -16,6 +16,7 @@
     "@form/auth": "workspace:*",
     "@form/config": "workspace:*",
     "@form/contracts": "workspace:*",
+    "@form/form-schema": "workspace:*",
     "@form/i18n": "workspace:*"
   },
   "devDependencies": {

@@ -144,8 +144,10 @@ describe("dashboard source contracts (ticket 06)", () => {
     expect(formPage).toContain("getForm");
     expect(formPage).toContain("notFound()");
     // The respondent-facing title comes from the draft envelope's `title`,
-    // while the dashboard label (with the rename control) is forms.name.
-    expect(formPage).toContain("draft.schema.title");
+    // which the ticket-08 builder client edits; the dashboard label
+    // (forms.name, with the rename control) stays on this page.
+    expect(formPage).toContain("form.draft.schema");
+    expect(formPage).toContain("BuilderClient");
     expect(formPage).toContain("RenameForm");
   });
 
