@@ -16,7 +16,11 @@ export function mailSinkUrl(): string {
 }
 
 function baseOrigin(): string {
-  return process.env.E2E_BASE_URL ?? "http://127.0.0.1:3000";
+  // The canonical dev origin — must equal the supervisor's APP_ORIGIN default
+  // (the origin guard rejects cross-origin state changes) and the Playwright
+  // baseURL, so every hop (dashboard, API rewrite, public form) stays
+  // same-origin.
+  return process.env.E2E_BASE_URL ?? "http://localhost:3000";
 }
 
 /**

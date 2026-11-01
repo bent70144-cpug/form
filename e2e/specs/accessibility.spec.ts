@@ -57,7 +57,10 @@ async function expectNoSeriousViolations(
 }
 
 test.describe("authoring + signed-out pages", () => {
+  // Playwright 1.6x types dropped the (fn, timeout) overload — the hook's
+  // timeout is changed from inside via test.setTimeout (documented way).
   test.beforeAll(async ({ browser }) => {
+    test.setTimeout(240_000);
     const page = await browser.newPage();
     const user = uniqueUser("e2e-a11y");
     await signUpAndVerify(page, user);
@@ -74,7 +77,7 @@ test.describe("authoring + signed-out pages", () => {
     const respondent = await browser.newPage();
     await submitPublicForm(respondent, form, "A11y answer");
     await respondent.close();
-  }, 240_000);
+  });
 
   test("sign-in page has no serious violations", async ({ page }) => {
     await page.goto("/sign-in");

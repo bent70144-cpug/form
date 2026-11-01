@@ -9,6 +9,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.10.2",
+    "@form/i18n": "workspace:*",
     "@playwright/test": "^1.51.1",
     "@types/node": "^22.10.2",
     "typescript": "^5.7.2"

@@ -335,8 +335,9 @@ describe("GET /v1/forms/{formId}/submissions/{submissionId}", () => {
     const res = await getSubmission(user.cookie, form.formId, v2SubmissionId);
     expect(res.status).toBe(200);
     expect(res.body.submission.formVersion.versionNumber).toBe(2);
-    const nameBlock = res.body.pinnedSchema.blocks.find((b) => b.id === Q_NAME);
-    expect(nameBlock.label).toBe("Given name");
+    const v2Detail = res.body as SubmissionDetail;
+    const nameBlock = v2Detail.pinnedSchema.blocks.find((b) => b.id === Q_NAME);
+    expect(nameBlock && nameBlock.kind === "short_text" && nameBlock.label).toBe("Given name");
   });
 
   it("404s: unknown submission, another form's submission, cross-workspace submission", async () => {

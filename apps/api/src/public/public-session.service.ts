@@ -58,6 +58,10 @@ const USER_AGENT_MAX_CHARS = 512;
 export class PublicSessionService {
   constructor(
     @Inject(APP_DB_POOL) private readonly pool: Pool,
+    // Explicit @Inject (codebase convention, see email-verified.guard.ts):
+    // tsx/esbuild emits no `design:paramtypes`, so a self-declared dep is
+    // `undefined` at runtime there — explicit tokens work in every pipeline.
+    @Inject(RateLimiter)
     private readonly limiter: RateLimiter,
     @Inject("PUBLIC_TRUSTED_IP_CONFIG") private readonly trustedIpConfig: TrustedIpConfig,
     @Inject("PUBLIC_IP_HASH_SECRET") private readonly ipHashSecret: string,

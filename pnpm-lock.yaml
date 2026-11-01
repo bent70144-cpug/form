@@ -206,6 +206,9 @@ importers:
       '@axe-core/playwright':
         specifier: ^4.10.2
         version: 4.14.0(playwright-core@1.64.1)
+      '@form/i18n':
+        specifier: workspace:*
+        version: link:../packages/i18n
       '@playwright/test':
         specifier: ^1.51.1
         version: 1.64.1
