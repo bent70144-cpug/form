@@ -1,8 +1,12 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { t } from "@form/i18n";
 import { getServerSession } from "../../lib/session";
+import { listForms } from "../../lib/forms";
 import SignOutButton from "./SignOutButton";
 import BootstrapWorkspace from "./BootstrapWorkspace";
+import NewFormButton from "./NewFormButton";
+import RenameForm from "./RenameForm";
 import ResendVerificationForm from "../verify-email/ResendVerificationForm";
 
 /**
@@ -20,10 +24,14 @@ import ResendVerificationForm from "../verify-email/ResendVerificationForm";
  * `email_unverified` — the shell shows the resend-verification prompt.
  *
  * Ticket 05: a verified user whose session has `workspace: null` gets the
- * small client bootstrap stepper — it POSTs /v1/workspaces/bootstrap from
- * the BROWSER through the same-origin rewrite, shows "Setting up your
- * workspace…", then refreshes into the workspace-bearing dashboard. The
- * server component itself never triggers bootstrap (read-only session GET).
+ * small client bootstrap stepper. The server component itself never
+ * triggers bootstrap (read-only session GET).
+ *
+ * Ticket 06: with a workspace present the shell lists the active
+ * workspace's forms (labels from `forms.name`) with a client-side
+ * "New form" button and inline rename; each row links to the form page
+ * shell at /dashboard/forms/{id}. The list GET runs server-side on the
+ * internal API (read-only); all mutations run in the browser.
  */
 export default async function DashboardPage() {
   const session = await getServerSession();
@@ -49,7 +57,10 @@ export default async function DashboardPage() {
           <ResendVerificationForm initialEmail={session.email} />
         </section>
       ) : session.workspace ? (
-        <p>{t("dashboard.placeholderNote")}</p>
+        <FormsSection
+          workspaceName={session.workspace.name}
+          workspaceRole={session.workspace.role}
+        />
       ) : (
         <BootstrapWorkspace />
       )}
@@ -58,5 +69,54 @@ export default async function DashboardPage() {
         <SignOutButton />
       </p>
     </main>
+  );
+}
+
+/**
+ * The form list (server component). The list GET runs server-side on the
+ * internal API; a failed read renders the empty state rather than crashing
+ * the shell.
+ */
+async function FormsSection(props: {
+  workspaceName: string;
+  workspaceRole: string;
+}) {
+  const page = await listForms();
+  const forms = page?.forms ?? [];
+
+  return (
+    <section>
+      <p>
+        <strong>{t("dashboard.workspace.label")}:</strong> {props.workspaceName}{" "}
+        <span style={{ color: "#555" }}>({props.workspaceRole})</span>
+      </p>
+      <h2>{t("dashboard.forms.title")}</h2>
+      <p>
+        <NewFormButton />
+      </p>
+
+      {forms.length === 0 ? (
+        <p>{t("dashboard.forms.empty")}</p>
+      ) : (
+        <ul style={{ listStyle: "none", padding: 0 }}>
+          {forms.map((form) => (
+            <li
+              key={form.id}
+              style={{ padding: "0.5rem 0", borderTop: "1px solid #eee" }}
+            >
+              <div>
+                <Link href={`/dashboard/forms/${form.id}`}>{form.name}</Link>{" "}
+                <span style={{ color: "#555" }}>
+                  {t("dashboard.forms.createdAt", {
+                    date: new Date(form.createdAt).toISOString(),
+                  })}
+                </span>
+              </div>
+              <RenameForm formId={form.id} currentName={form.name} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
