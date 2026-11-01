@@ -15,6 +15,7 @@
     "react-dom": "19.2.4",
     "@form/auth": "workspace:*",
     "@form/config": "workspace:*",
+    "@form/contracts": "workspace:*",
     "@form/i18n": "workspace:*"
   },
   "devDependencies": {

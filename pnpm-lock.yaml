@@ -126,6 +126,9 @@ importers:
       '@form/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@form/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@form/i18n':
         specifier: workspace:*
         version: link:../../packages/i18n
