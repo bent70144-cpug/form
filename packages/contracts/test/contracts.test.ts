@@ -13,6 +13,8 @@ import {
   formDraftSchemaSchema,
   healthResponseSchema,
   listFormsResponseSchema,
+  listSubmissionsRequestSchema,
+  listSubmissionsResponseSchema,
   problemDetailsSchema,
   problemType,
   renameFormRequestSchema,
@@ -20,6 +22,7 @@ import {
   sessionResponseSchema,
   submitReceiptSchema,
   submitRequestSchema,
+  submissionDetailSchema,
   workspaceSchema,
 } from "../src/index";
 
@@ -314,5 +317,64 @@ describe("public session + submission contracts (ticket 10)", () => {
     };
     expect(doc.paths["/v1/public/forms/{slug}/sessions"]?.post?.operationId).toBe("createPublicSession");
     expect(doc.paths["/v1/public/submissions"]?.post?.operationId).toBe("submitPublicForm");
+  });
+});
+
+describe("submission inbox contracts (ticket 11)", () => {
+  it("listSubmissionsRequestSchema: default 20, max 100, opaque cursor", () => {
+    expect(listSubmissionsRequestSchema.parse({})).toEqual({ limit: 20 });
+    expect(listSubmissionsRequestSchema.parse({ limit: "100" })).toEqual({ limit: 100 });
+    expect(listSubmissionsRequestSchema.safeParse({ limit: 101 }).success).toBe(false);
+    expect(listSubmissionsRequestSchema.safeParse({ limit: 0 }).success).toBe(false);
+    expect(listSubmissionsRequestSchema.safeParse({ limit: 2.5 }).success).toBe(false);
+    expect(
+      listSubmissionsRequestSchema.safeParse({ cursor: "abc", extra: 1 }).success,
+    ).toBe(false);
+  });
+
+  it("listSubmissionsResponseSchema: summaries + nullable nextCursor", () => {
+    const page = {
+      submissions: [
+        {
+          id: "018f0b2e-6f7a-7c3e-9a1b-2c3d4e5f6a7b",
+          createdAt: "2026-11-01T12:00:00.000Z",
+          formVersionNumber: 3,
+        },
+      ],
+      nextCursor: null,
+    };
+    expect(listSubmissionsResponseSchema.safeParse(page).success).toBe(true);
+    expect(
+      listSubmissionsResponseSchema.safeParse({ ...page, nextCursor: undefined }).success,
+    ).toBe(false);
+  });
+
+  it("submissionDetailSchema: answer/label pairs ordered by the pinned schema", () => {
+    const detail = {
+      id: "018f0b2e-6f7a-7c3e-9a1b-2c3d4e5f6a7b",
+      createdAt: "2026-11-01T12:00:00.000Z",
+      formVersionNumber: 1,
+      answers: [
+        { blockId: "q1", label: "Full name", answer: "Ada" },
+        { blockId: "q2", label: null, answer: "orphan" },
+      ],
+    };
+    expect(submissionDetailSchema.safeParse(detail).success).toBe(true);
+    expect(
+      submissionDetailSchema.safeParse({ ...detail, answers: "nope" }).success,
+    ).toBe(false);
+    expect(
+      submissionDetailSchema.safeParse({ ...detail, formVersionNumber: 0 }).success,
+    ).toBe(false);
+  });
+
+  it("exposes the ticket-11 inbox routes in the openapi document", () => {
+    const doc = buildOpenApiDocument() as {
+      paths: Record<string, Record<string, { operationId?: string }>>;
+    };
+    expect(doc.paths["/v1/forms/{formId}/submissions"]?.get?.operationId).toBe("listSubmissions");
+    expect(
+      doc.paths["/v1/forms/{formId}/submissions/{submissionId}"]?.get?.operationId,
+    ).toBe("getSubmission");
   });
 });

@@ -605,6 +605,45 @@ exports[`openapi document > matches the committed snapshot 1`] = `
         ],
         "type": "object",
       },
+      "ListSubmissionsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "nextCursor": {
+            "nullable": true,
+            "type": "string",
+          },
+          "submissions": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "createdAt": {
+                  "type": "string",
+                },
+                "formVersionNumber": {
+                  "minimum": 1,
+                  "type": "integer",
+                },
+                "id": {
+                  "format": "uuid",
+                  "type": "string",
+                },
+              },
+              "required": [
+                "id",
+                "createdAt",
+                "formVersionNumber",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+        },
+        "required": [
+          "submissions",
+          "nextCursor",
+        ],
+        "type": "object",
+      },
       "ProblemDetails": {
         "additionalProperties": false,
         "properties": {
@@ -1193,6 +1232,53 @@ exports[`openapi document > matches the committed snapshot 1`] = `
           "expiresAt",
           "pinnedVersionId",
           "schema",
+        ],
+        "type": "object",
+      },
+      "SubmissionDetail": {
+        "additionalProperties": false,
+        "properties": {
+          "answers": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "answer": {
+                  "type": "string",
+                },
+                "blockId": {
+                  "type": "string",
+                },
+                "label": {
+                  "nullable": true,
+                  "type": "string",
+                },
+              },
+              "required": [
+                "blockId",
+                "label",
+                "answer",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+          "createdAt": {
+            "type": "string",
+          },
+          "formVersionNumber": {
+            "minimum": 1,
+            "type": "integer",
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string",
+          },
+        },
+        "required": [
+          "id",
+          "createdAt",
+          "formVersionNumber",
+          "answers",
         ],
         "type": "object",
       },
@@ -2666,6 +2752,255 @@ exports[`openapi document > matches the committed snapshot 1`] = `
           },
         },
         "summary": "Publish (or republish) the form as a new immutable version",
+        "tags": [
+          "forms",
+        ],
+      },
+    },
+    "/v1/forms/{formId}/submissions": {
+      "get": {
+        "description": "Cursor pagination over the inbox list: newest first by \`(created_at, id)\`, default page size 20, maximum 100 (\`limit\` is validated; violations answer 422). Each row carries the received time and the pinned form version number. Unknown or cross-workspace forms answer 404 (never 403) to avoid enumeration — RLS hides the other workspace's rows.",
+        "operationId": "listSubmissions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "formId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer",
+            },
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "nextCursor": {
+                      "nullable": true,
+                      "type": "string",
+                    },
+                    "submissions": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "createdAt": {
+                            "type": "string",
+                          },
+                          "formVersionNumber": {
+                            "minimum": 1,
+                            "type": "integer",
+                          },
+                          "id": {
+                            "format": "uuid",
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "id",
+                          "createdAt",
+                          "formVersionNumber",
+                        ],
+                        "type": "object",
+                      },
+                      "type": "array",
+                    },
+                  },
+                  "required": [
+                    "submissions",
+                    "nextCursor",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "One page (optionally empty) of submission summaries",
+          },
+          "401": {
+            "description": "Absent, invalid, expired, or revoked session",
+          },
+          "403": {
+            "description": "Email not verified or no workspace yet (\`forbidden\`)",
+          },
+          "404": {
+            "description": "Unknown form or a form of another workspace (\`not_found\`)",
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                    },
+                    "detail": {
+                      "type": "string",
+                    },
+                    "errors": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "code": {
+                            "type": "string",
+                          },
+                          "message": {
+                            "type": "string",
+                          },
+                          "path": {
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "path",
+                          "code",
+                          "message",
+                        ],
+                        "type": "object",
+                      },
+                      "type": "array",
+                    },
+                    "status": {
+                      "type": "integer",
+                    },
+                    "title": {
+                      "type": "string",
+                    },
+                    "type": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Invalid \`limit\` or \`cursor\` (\`validation_failed\`)",
+          },
+        },
+        "summary": "List a form's submissions, newest first",
+        "tags": [
+          "forms",
+        ],
+      },
+    },
+    "/v1/forms/{formId}/submissions/{submissionId}": {
+      "get": {
+        "description": "Pairs EACH stored answer with its question label taken from the PINNED version's schema (the version the respondent actually saw — never the mutable draft), ordered like the pinned blocks, plus the received time and the form version number. Labels and answers are plain text; the web app renders them escaped. Unknown submission, a submission of another form, or a cross-workspace resource answers 404 (never 403).",
+        "operationId": "getSubmission",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "formId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string",
+            },
+          },
+          {
+            "in": "path",
+            "name": "submissionId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "answers": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "answer": {
+                            "type": "string",
+                          },
+                          "blockId": {
+                            "type": "string",
+                          },
+                          "label": {
+                            "nullable": true,
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "blockId",
+                          "label",
+                          "answer",
+                        ],
+                        "type": "object",
+                      },
+                      "type": "array",
+                    },
+                    "createdAt": {
+                      "type": "string",
+                    },
+                    "formVersionNumber": {
+                      "minimum": 1,
+                      "type": "integer",
+                    },
+                    "id": {
+                      "format": "uuid",
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "id",
+                    "createdAt",
+                    "formVersionNumber",
+                    "answers",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "The submission detail with answer/label pairs",
+          },
+          "401": {
+            "description": "Absent, invalid, expired, or revoked session",
+          },
+          "403": {
+            "description": "Email not verified or no workspace yet (\`forbidden\`)",
+          },
+          "404": {
+            "description": "Unknown submission or one belonging to another workspace (\`not_found\`)",
+          },
+        },
+        "summary": "Read one submission with labels from the pinned version",
         "tags": [
           "forms",
         ],
