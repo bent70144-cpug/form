@@ -108,6 +108,29 @@ export const en = {
       validationHeading: "Fix these issues before the draft can save:",
     },
     /**
+     * Submission inbox (ticket 11) — the per-form list + detail views.
+     * Every label, empty state, date line and error is looked up here;
+     * received times are formatted by lib/submissions.ts (deterministic UTC)
+     * and interpolated into `receivedAt`.
+     */
+    inbox: {
+      title: "Submissions",
+      open: "View submissions",
+      empty:
+        "No submissions yet. Share the public link to collect your first response.",
+      receivedAt: "Received {date}",
+      versionBadge: "Form version {version}",
+      backToForm: "Back to form",
+      backToInbox: "Back to submissions",
+      detailTitle: "Submission",
+      questionHeading: "Question",
+      answerHeading: "Answer",
+      unknownQuestion: "Unknown question",
+      morePages: "Older submissions",
+      loadFailed:
+        "Submissions could not be loaded. Reload the page to try again.",
+    },
+    /**
      * Publish controls (ticket 09): status line, Publish / Republish /
      * Unpublish, copy-link, closed note and the worst-case size warning.
      * Publish-time 422 issue codes resolve through `errors.schemaIssues`

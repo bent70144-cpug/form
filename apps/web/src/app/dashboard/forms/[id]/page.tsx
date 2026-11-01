@@ -72,6 +72,12 @@ export default async function FormPage(props: {
 
       <PublishControls formId={form.id} status={form.status} appOrigin={appOrigin} />
 
+      <p>
+        <Link href={`/dashboard/forms/${form.id}/submissions`}>
+          {t("dashboard.inbox.open")}
+        </Link>
+      </p>
+
       <BuilderClient
         formId={form.id}
         initialSchema={form.draft.schema}
