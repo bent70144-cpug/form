@@ -124,6 +124,10 @@ function unpublish(cookie: string, formId: string) {
     .send();
 }
 
+function getDetail(cookie: string, formId: string) {
+  return request(app).get(`/v1/forms/${formId}`).set("Cookie", cookie);
+}
+
 function getPublic(slug: string, options: { origin?: string | null } = {}) {
   const req = request(app).get(`/v1/public/forms/${slug}`);
   if (options.origin !== null) req.set("Origin", options.origin ?? fx.appName);
@@ -534,6 +538,47 @@ describe("unpublish and closed lifecycle", () => {
     const republished = await getPublic(slug).expect(200);
     expect(republished.body.status).toBe("published");
     expect(republished.body.versionNumber).toBe(2);
+  });
+});
+
+describe("GET /v1/forms/{id} — publish pointer on the detail (T10 additive)", () => {
+  it("returns null slug/version before publish and both after, matching the publish response", async () => {
+    const { cookie } = await newWorkspaceUser("detail-ptr");
+    const form = (await createForm(cookie, {})).body as FormDetail;
+
+    // Never published: both pointer fields are null (not absent — the
+    // dashboard reads them uniformly after a reload).
+    const before = await getDetail(cookie, form.id);
+    expect(before.status).toBe(200);
+    expect(before.body.slug).toBeNull();
+    expect(before.body.publishedVersionNumber).toBeNull();
+
+    await saveDraft(cookie, form.id, publishableEnvelope(), 0);
+    const published = await publish(cookie, form.id);
+    expect(published.status).toBe(200);
+    const { slug, versionNumber } = published.body as {
+      slug: string;
+      versionNumber: number;
+    };
+
+    // After publish the detail carries the SAME slug and version number the
+    // publish mutation returned — copy-link + version display survive a
+    // reload without replaying the mutation.
+    const after = await getDetail(cookie, form.id);
+    expect(after.status).toBe(200);
+    expect(after.body.slug).toBe(slug);
+    expect(after.body.publishedVersionNumber).toBe(versionNumber);
+
+    // Unpublish closes the form but keeps the pointer: the dashboard still
+    // knows the link target and last published version (the closed message
+    // is what respondents see).
+    const un = await unpublish(cookie, form.id);
+    expect(un.status).toBe(200);
+    const closed = await getDetail(cookie, form.id);
+    expect(closed.status).toBe(200);
+    expect(closed.body.status).toBe("closed");
+    expect(closed.body.slug).toBe(slug);
+    expect(closed.body.publishedVersionNumber).toBe(versionNumber);
   });
 });
 

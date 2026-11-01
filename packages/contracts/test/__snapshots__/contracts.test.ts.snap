@@ -211,6 +211,16 @@ exports[`openapi document > matches the committed snapshot 1`] = `
             "format": "uuid",
             "type": "string",
           },
+          "publishedVersionNumber": {
+            "minimum": 1,
+            "nullable": true,
+            "type": "integer",
+          },
+          "slug": {
+            "nullable": true,
+            "pattern": "^[A-Za-z0-9]{10}$",
+            "type": "string",
+          },
           "status": {
             "enum": [
               "draft",
@@ -452,6 +462,16 @@ exports[`openapi document > matches the committed snapshot 1`] = `
           },
           "projectId": {
             "format": "uuid",
+            "type": "string",
+          },
+          "publishedVersionNumber": {
+            "minimum": 1,
+            "nullable": true,
+            "type": "integer",
+          },
+          "slug": {
+            "nullable": true,
+            "pattern": "^[A-Za-z0-9]{10}$",
             "type": "string",
           },
           "status": {
@@ -1725,6 +1745,16 @@ exports[`openapi document > matches the committed snapshot 1`] = `
                       "format": "uuid",
                       "type": "string",
                     },
+                    "publishedVersionNumber": {
+                      "minimum": 1,
+                      "nullable": true,
+                      "type": "integer",
+                    },
+                    "slug": {
+                      "nullable": true,
+                      "pattern": "^[A-Za-z0-9]{10}$",
+                      "type": "string",
+                    },
                     "status": {
                       "enum": [
                         "draft",
@@ -2154,6 +2184,16 @@ exports[`openapi document > matches the committed snapshot 1`] = `
                     },
                     "projectId": {
                       "format": "uuid",
+                      "type": "string",
+                    },
+                    "publishedVersionNumber": {
+                      "minimum": 1,
+                      "nullable": true,
+                      "type": "integer",
+                    },
+                    "slug": {
+                      "nullable": true,
+                      "pattern": "^[A-Za-z0-9]{10}$",
                       "type": "string",
                     },
                     "status": {

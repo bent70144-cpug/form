@@ -97,9 +97,24 @@ export type FormSummary = z.infer<typeof formSummarySchema>;
 /**
  * Form detail — form + its mutable draft (the shape the form-page shell
  * renders and the T07 draft PUT will target for saves).
+ *
+ * Ticket 10 (additive): `slug` and `publishedVersionNumber` surface the
+ * publish pointer state on the detail response so the dashboard can restore
+ * the copy-link and version display after a reload (publish-time they were
+ * only available from the publish/unpublish mutation responses). Both are
+ * `null` while the form has never been published and stay additive/optional
+ * so every existing producer remains valid.
  */
 export const formDetailSchema = formSummarySchema.extend({
   projectId: z.string().uuid(),
+  /** The CURRENT public slug (form_slugs.is_current) — null until first publish. */
+  slug: z
+    .string()
+    .regex(/^[A-Za-z0-9]{10}$/)
+    .nullable()
+    .optional(),
+  /** `form_versions.version_number` of `forms.published_version_id` — null while unpublished. */
+  publishedVersionNumber: z.number().int().min(1).nullable().optional(),
   draft: z.object({
     draftVersion: z.number().int().min(0),
     schema: formDraftSchemaSchema,

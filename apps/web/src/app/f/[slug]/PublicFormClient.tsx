@@ -2,8 +2,11 @@
  * JSX compile note: the web tsconfig uses `jsx: "preserve"`, so Next/SWC
  * compiles this file with the automatic runtime (no React import needed for
  * JSX itself), while the vitest/esbuild pipeline falls back to the classic
- * transform — the explicit `import * as React` below satisfies BOTH, and no
- * @jsx pragma is set (Turbopack rejects pragmas under the automatic runtime).
+ * transform — the explicit `import * as React` below satisfies BOTH.
+ * CAUTION: never write the JSX-pragma marker (at-sign + jsx) verbatim in a
+ * comment here — esbuild scans comments for that marker and treats the
+ * following word as the JSX factory (Turbopack likewise rejects pragmas
+ * under the automatic runtime, and the marker silently breaks vitest).
  */
 "use client";
 import * as React from "react";
@@ -91,20 +94,22 @@ export default function PublicFormClient(props: { slug: string; schema: FormDraf
       ? window.sessionStorage.getItem(sessionTokenStorageKey(props.slug))
       : null;
     if (stored !== null) {
+      tokenRef.current = stored;
       setSessionState("active");
       return;
     }
     void createPublicSession(props.slug).then((result) => {
       if (cancelled) return;
       if (result.ok) {
+        tokenRef.current = result.session.token;
         try {
           window.sessionStorage.setItem(
             sessionTokenStorageKey(props.slug),
             result.session.token,
           );
         } catch {
-          // sessionStorage unavailable (private mode) — the in-memory flow
-          // still works for this mount; the submit uses the token directly.
+          // sessionStorage unavailable (private mode) — tokenRef above keeps
+          // the in-memory flow working for this mount.
         }
         setSessionState("active");
       } else {

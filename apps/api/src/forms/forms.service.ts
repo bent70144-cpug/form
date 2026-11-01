@@ -50,6 +50,10 @@ interface FormDetailRow extends FormRow {
   project_id: string;
   draft_version: number;
   draft_schema: unknown;
+  /** Current public slug (form_slugs.is_current) — null until first publish. */
+  slug: string | null;
+  /** version_number of forms.published_version_id — null while unpublished. */
+  published_version_number: number | null;
 }
 
 function iso(value: Date): string {
@@ -70,12 +74,36 @@ function toDetail(row: FormDetailRow): FormDetail {
   return {
     ...toSummary(row),
     projectId: row.project_id,
+    // Ticket 10 (additive): publish-pointer state for the dashboard's
+    // copy-link + version display after reload (null until first publish).
+    slug: row.slug ?? null,
+    publishedVersionNumber: row.published_version_number ?? null,
     draft: {
       draftVersion: row.draft_version,
       schema: row.draft_schema as DraftEnvelope,
     },
   };
 }
+
+/**
+ * Detail SELECT shared by create + getById. The LEFT JOINs surface the
+ * publish pointer (current slug + published version number) without a
+ * second round trip; both are NULL for a form that never published.
+ */
+const DETAIL_SELECT = `SELECT f.id::text, f.name, f.status::text, f.project_id::text,
+              f.created_at, f.updated_at,
+              d.draft_version, d.schema AS draft_schema,
+              cur.slug AS slug,
+              pv.version_number AS published_version_number
+         FROM app.forms f
+         JOIN app.form_drafts d
+           ON d.workspace_id = f.workspace_id AND d.form_id = f.id
+         LEFT JOIN app.form_slugs cur
+           ON cur.workspace_id = f.workspace_id AND cur.form_id = f.id
+          AND cur.is_current
+         LEFT JOIN app.form_versions pv
+           ON pv.workspace_id = f.workspace_id
+          AND pv.id = f.published_version_id`;
 
 /** Opaque cursor: base64url of the keyset position `{ t, id }`. */
 export function encodeCursor(position: { t: string; id: string }): string {
@@ -168,12 +196,7 @@ export class FormsService {
     );
 
     const created = await tenant.query<FormDetailRow>(
-      `SELECT f.id::text, f.name, f.status::text, f.project_id::text,
-              f.created_at, f.updated_at,
-              d.draft_version, d.schema AS draft_schema
-         FROM app.forms f
-         JOIN app.form_drafts d
-           ON d.workspace_id = f.workspace_id AND d.form_id = f.id
+      `${DETAIL_SELECT}
         WHERE f.workspace_id = $1 AND f.id = $2 AND f.deleted_at IS NULL`,
       [workspaceId, formId],
     );
@@ -236,12 +259,7 @@ export class FormsService {
   /** Form + draft, or null when the row is missing/soft-deleted/foreign. */
   async getById(tenant: TenantDb, formId: string): Promise<FormDetail | null> {
     const result = await tenant.query<FormDetailRow>(
-      `SELECT f.id::text, f.name, f.status::text, f.project_id::text,
-              f.created_at, f.updated_at,
-              d.draft_version, d.schema AS draft_schema
-         FROM app.forms f
-         JOIN app.form_drafts d
-           ON d.workspace_id = f.workspace_id AND d.form_id = f.id
+      `${DETAIL_SELECT}
         WHERE f.workspace_id = $1 AND f.id = $2 AND f.deleted_at IS NULL`,
       [tenant.context.workspaceId, formId],
     );
