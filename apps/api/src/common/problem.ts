@@ -19,12 +19,23 @@ export const PROBLEM_TITLE_KEYS: Partial<Record<ErrorCode, `errors.${string}.tit
   rate_limited: "errors.rateLimited.title",
   origin_mismatch: "errors.originMismatch.title",
   internal_error: "errors.internal.title",
+  // Ticket 10 — public session/submit discriminators.
+  session_required: "errors.sessionRequired.title",
+  session_not_found: "errors.sessionNotFound.title",
+  session_expired: "errors.sessionExpired.title",
+  session_completed: "errors.sessionCompleted.title",
+  form_closed: "errors.formClosed.title",
 };
 
 /** i18n keys carrying optional extra detail for specific codes. */
 export const PROBLEM_DETAIL_KEYS: Partial<Record<ErrorCode, string>> = {
   email_unverified: "errors.emailUnverified.detail",
   origin_mismatch: "errors.originMismatch.detail",
+  session_required: "errors.sessionRequired.detail",
+  session_not_found: "errors.sessionNotFound.detail",
+  session_expired: "errors.sessionExpired.detail",
+  session_completed: "errors.sessionCompleted.detail",
+  form_closed: "errors.formClosed.detail",
 };
 
 export function sendProblem(

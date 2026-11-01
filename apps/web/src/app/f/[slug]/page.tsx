@@ -2,18 +2,24 @@ import { notFound, permanentRedirect } from "next/navigation";
 import type { Metadata } from "next";
 import { t } from "@form/i18n";
 import { fetchPublicForm } from "./public-api-client";
-import PublicFormView, { PublicFormClosed } from "./PublicFormView";
+import { PublicFormClosed } from "./PublicFormView";
+import PublicFormClient from "./PublicFormClient";
 
 /**
- * Public form page /f/[slug] (ticket 09) — server-rendered, read-only.
+ * Public form page /f/[slug] (tickets 09 + 10) — server-rendered, then
+ * INTERACTIVE in the browser.
  *
  * The page NEVER touches the database (the web app has none): it calls the
  * UNauthenticated `GET /v1/public/forms/{slug}` on the INTERNAL API URL via
  * fetchPublicForm() and maps the four statuses onto responses:
  *
- *   published → the read-only block view (welcome/question/ending, all
- *               creator text React-escaped; NO session is created — ticket 10
- *               adds interactivity in front of the same endpoint)
+ *   published → the interactive client form (ticket 10): it creates the
+ *               pinned session on mount (cookie-less POST through the /v1
+ *               rewrite), collects answers, validates required questions
+ *               client-side (convenience only — the server is authoritative),
+ *               submits with X-Form-Session, and shows the ending block after
+ *               the receipt; closed/expired submit failures show their
+ *               dedicated messages
  *   closed    → the closed message (unpublished or soft-deleted form)
  *   redirect  → permanentRedirect(`/f/{canonicalSlug}`) — a 308 like the
  *               API's own redirect semantics
@@ -40,10 +46,7 @@ export default async function PublicFormPage(props: {
   switch (result.status) {
     case "published":
       return (
-        <PublicFormView
-          title={result.schema.title}
-          blocks={result.schema.blocks}
-        />
+        <PublicFormClient slug={slug} schema={result.schema} />
       );
     case "closed":
       return <PublicFormClosed />;

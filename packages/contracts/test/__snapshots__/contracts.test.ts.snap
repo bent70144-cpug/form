@@ -211,6 +211,16 @@ exports[`openapi document > matches the committed snapshot 1`] = `
             "format": "uuid",
             "type": "string",
           },
+          "publishedVersionNumber": {
+            "minimum": 1,
+            "nullable": true,
+            "type": "integer",
+          },
+          "slug": {
+            "nullable": true,
+            "pattern": "^[A-Za-z0-9]{10}$",
+            "type": "string",
+          },
           "status": {
             "enum": [
               "draft",
@@ -452,6 +462,16 @@ exports[`openapi document > matches the committed snapshot 1`] = `
           },
           "projectId": {
             "format": "uuid",
+            "type": "string",
+          },
+          "publishedVersionNumber": {
+            "minimum": 1,
+            "nullable": true,
+            "type": "integer",
+          },
+          "slug": {
+            "nullable": true,
+            "pattern": "^[A-Za-z0-9]{10}$",
             "type": "string",
           },
           "status": {
@@ -979,6 +999,236 @@ exports[`openapi document > matches the committed snapshot 1`] = `
         ],
         "type": "object",
       },
+      "SessionCreateResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "expiresAt": {
+            "type": "string",
+          },
+          "pinnedVersionId": {
+            "format": "uuid",
+            "type": "string",
+          },
+          "schema": {
+            "additionalProperties": false,
+            "properties": {
+              "blocks": {
+                "items": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "description": {
+                          "type": "string",
+                        },
+                        "id": {
+                          "type": "string",
+                        },
+                        "kind": {
+                          "enum": [
+                            "welcome",
+                          ],
+                          "type": "string",
+                        },
+                        "title": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "id",
+                        "kind",
+                        "title",
+                      ],
+                      "type": "object",
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "description": {
+                          "type": "string",
+                        },
+                        "id": {
+                          "$ref": "#/properties/schema/properties/blocks/items/anyOf/0/properties/id",
+                        },
+                        "kind": {
+                          "enum": [
+                            "short_text",
+                          ],
+                          "type": "string",
+                        },
+                        "label": {
+                          "type": "string",
+                        },
+                        "placeholder": {
+                          "type": "string",
+                        },
+                        "required": {
+                          "type": "boolean",
+                        },
+                      },
+                      "required": [
+                        "id",
+                        "kind",
+                        "label",
+                        "required",
+                      ],
+                      "type": "object",
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "description": {
+                          "type": "string",
+                        },
+                        "id": {
+                          "$ref": "#/properties/schema/properties/blocks/items/anyOf/0/properties/id",
+                        },
+                        "kind": {
+                          "enum": [
+                            "long_text",
+                          ],
+                          "type": "string",
+                        },
+                        "label": {
+                          "type": "string",
+                        },
+                        "placeholder": {
+                          "type": "string",
+                        },
+                        "required": {
+                          "type": "boolean",
+                        },
+                      },
+                      "required": [
+                        "id",
+                        "kind",
+                        "label",
+                        "required",
+                      ],
+                      "type": "object",
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "description": {
+                          "type": "string",
+                        },
+                        "id": {
+                          "$ref": "#/properties/schema/properties/blocks/items/anyOf/0/properties/id",
+                        },
+                        "kind": {
+                          "enum": [
+                            "ending",
+                          ],
+                          "type": "string",
+                        },
+                        "title": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "id",
+                        "kind",
+                        "title",
+                      ],
+                      "type": "object",
+                    },
+                  ],
+                },
+                "type": "array",
+              },
+              "logic": {
+                "items": {
+                  "additionalProperties": {},
+                  "type": "object",
+                },
+                "type": "array",
+              },
+              "schemaVersion": {
+                "enum": [
+                  1,
+                ],
+                "type": "number",
+              },
+              "settings": {
+                "additionalProperties": {},
+                "type": "object",
+              },
+              "theme": {
+                "additionalProperties": false,
+                "properties": {
+                  "preset": {
+                    "enum": [
+                      "default",
+                    ],
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "preset",
+                ],
+                "type": "object",
+              },
+              "title": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "schemaVersion",
+              "title",
+              "blocks",
+              "logic",
+              "theme",
+              "settings",
+            ],
+            "type": "object",
+          },
+          "token": {
+            "minLength": 16,
+            "type": "string",
+          },
+        },
+        "required": [
+          "token",
+          "expiresAt",
+          "pinnedVersionId",
+          "schema",
+        ],
+        "type": "object",
+      },
+      "SubmitReceipt": {
+        "additionalProperties": false,
+        "properties": {
+          "submissionId": {
+            "format": "uuid",
+            "type": "string",
+          },
+          "submitted": {
+            "enum": [
+              true,
+            ],
+            "type": "boolean",
+          },
+        },
+        "required": [
+          "submitted",
+          "submissionId",
+        ],
+        "type": "object",
+      },
+      "SubmitRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "answers": {
+            "additionalProperties": {},
+            "type": "object",
+          },
+        },
+        "required": [
+          "answers",
+        ],
+        "type": "object",
+      },
       "UnpublishResponse": {
         "additionalProperties": false,
         "properties": {
@@ -1495,6 +1745,16 @@ exports[`openapi document > matches the committed snapshot 1`] = `
                       "format": "uuid",
                       "type": "string",
                     },
+                    "publishedVersionNumber": {
+                      "minimum": 1,
+                      "nullable": true,
+                      "type": "integer",
+                    },
+                    "slug": {
+                      "nullable": true,
+                      "pattern": "^[A-Za-z0-9]{10}$",
+                      "type": "string",
+                    },
                     "status": {
                       "enum": [
                         "draft",
@@ -1924,6 +2184,16 @@ exports[`openapi document > matches the committed snapshot 1`] = `
                     },
                     "projectId": {
                       "format": "uuid",
+                      "type": "string",
+                    },
+                    "publishedVersionNumber": {
+                      "minimum": 1,
+                      "nullable": true,
+                      "type": "integer",
+                    },
+                    "slug": {
+                      "nullable": true,
+                      "pattern": "^[A-Za-z0-9]{10}$",
                       "type": "string",
                     },
                     "status": {
@@ -2919,6 +3189,708 @@ exports[`openapi document > matches the committed snapshot 1`] = `
           },
         },
         "summary": "Read the published form by public slug (UNauthenticated, cookie-less)",
+        "tags": [
+          "forms",
+        ],
+      },
+    },
+    "/v1/public/forms/{slug}/sessions": {
+      "post": {
+        "description": "Wraps the security-definer resolve_public_form(slug) — only published, non-deleted forms resolve (404 otherwise). Returns the RAW session token ONCE (only its SHA-256 hash is stored), the 24h expiry, the pinned published version id, and the pinned schema. Rate-limited to 30 requests per hour per trusted client IP AND per form (429 rate_limited). app.workspace_id is set from the resolved form, never from the client; a forged workspace header is ignored.",
+        "operationId": "createPublicSession",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9]{10}$",
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "expiresAt": {
+                      "type": "string",
+                    },
+                    "pinnedVersionId": {
+                      "format": "uuid",
+                      "type": "string",
+                    },
+                    "schema": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "blocks": {
+                          "items": {
+                            "anyOf": [
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "description": {
+                                    "type": "string",
+                                  },
+                                  "id": {
+                                    "type": "string",
+                                  },
+                                  "kind": {
+                                    "enum": [
+                                      "welcome",
+                                    ],
+                                    "type": "string",
+                                  },
+                                  "title": {
+                                    "type": "string",
+                                  },
+                                },
+                                "required": [
+                                  "id",
+                                  "kind",
+                                  "title",
+                                ],
+                                "type": "object",
+                              },
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "description": {
+                                    "type": "string",
+                                  },
+                                  "id": {
+                                    "$ref": "#/properties/schema/properties/blocks/items/anyOf/0/properties/id",
+                                  },
+                                  "kind": {
+                                    "enum": [
+                                      "short_text",
+                                    ],
+                                    "type": "string",
+                                  },
+                                  "label": {
+                                    "type": "string",
+                                  },
+                                  "placeholder": {
+                                    "type": "string",
+                                  },
+                                  "required": {
+                                    "type": "boolean",
+                                  },
+                                },
+                                "required": [
+                                  "id",
+                                  "kind",
+                                  "label",
+                                  "required",
+                                ],
+                                "type": "object",
+                              },
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "description": {
+                                    "type": "string",
+                                  },
+                                  "id": {
+                                    "$ref": "#/properties/schema/properties/blocks/items/anyOf/0/properties/id",
+                                  },
+                                  "kind": {
+                                    "enum": [
+                                      "long_text",
+                                    ],
+                                    "type": "string",
+                                  },
+                                  "label": {
+                                    "type": "string",
+                                  },
+                                  "placeholder": {
+                                    "type": "string",
+                                  },
+                                  "required": {
+                                    "type": "boolean",
+                                  },
+                                },
+                                "required": [
+                                  "id",
+                                  "kind",
+                                  "label",
+                                  "required",
+                                ],
+                                "type": "object",
+                              },
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "description": {
+                                    "type": "string",
+                                  },
+                                  "id": {
+                                    "$ref": "#/properties/schema/properties/blocks/items/anyOf/0/properties/id",
+                                  },
+                                  "kind": {
+                                    "enum": [
+                                      "ending",
+                                    ],
+                                    "type": "string",
+                                  },
+                                  "title": {
+                                    "type": "string",
+                                  },
+                                },
+                                "required": [
+                                  "id",
+                                  "kind",
+                                  "title",
+                                ],
+                                "type": "object",
+                              },
+                            ],
+                          },
+                          "type": "array",
+                        },
+                        "logic": {
+                          "items": {
+                            "additionalProperties": {},
+                            "type": "object",
+                          },
+                          "type": "array",
+                        },
+                        "schemaVersion": {
+                          "enum": [
+                            1,
+                          ],
+                          "type": "number",
+                        },
+                        "settings": {
+                          "additionalProperties": {},
+                          "type": "object",
+                        },
+                        "theme": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "preset": {
+                              "enum": [
+                                "default",
+                              ],
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "preset",
+                          ],
+                          "type": "object",
+                        },
+                        "title": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "schemaVersion",
+                        "title",
+                        "blocks",
+                        "logic",
+                        "theme",
+                        "settings",
+                      ],
+                      "type": "object",
+                    },
+                    "token": {
+                      "minLength": 16,
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "token",
+                    "expiresAt",
+                    "pinnedVersionId",
+                    "schema",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "The pinned session (token returned once)",
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                    },
+                    "detail": {
+                      "type": "string",
+                    },
+                    "errors": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "code": {
+                            "type": "string",
+                          },
+                          "message": {
+                            "type": "string",
+                          },
+                          "path": {
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "path",
+                          "code",
+                          "message",
+                        ],
+                        "type": "object",
+                      },
+                      "type": "array",
+                    },
+                    "status": {
+                      "type": "integer",
+                    },
+                    "title": {
+                      "type": "string",
+                    },
+                    "type": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Unknown slug, or the form is not currently published (\`not_found\`)",
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                    },
+                    "detail": {
+                      "type": "string",
+                    },
+                    "errors": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "code": {
+                            "type": "string",
+                          },
+                          "message": {
+                            "type": "string",
+                          },
+                          "path": {
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "path",
+                          "code",
+                          "message",
+                        ],
+                        "type": "object",
+                      },
+                      "type": "array",
+                    },
+                    "status": {
+                      "type": "integer",
+                    },
+                    "title": {
+                      "type": "string",
+                    },
+                    "type": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Session-creation limit exhausted (\`rate_limited\`, Retry-After)",
+          },
+        },
+        "summary": "Create a pinned public session (UNauthenticated, cookie-less)",
+        "tags": [
+          "forms",
+        ],
+      },
+    },
+    "/v1/public/submissions": {
+      "post": {
+        "description": "ONE transaction per spec: resolve the session by the SHA-256 of the raw X-Form-Session token (resolve_form_session), reject unknown (404), expired-beyond-grace (410) or completed sessions, verify the form is still published and the pinned version exists (409 form_closed), validate the answers against the PINNED schema (422 with stable per-answer codes), lock the form row and enforce the per-form submission cap (409 form_full), insert the submission (UNIQUE form_session_id makes retries idempotent — the loser of a concurrent race gets the SAME receipt), mark the session completed, and write the submission.created audit row + outbox event. Stored answers are never returned. app.workspace_id always comes from the resolved session, never from the client.",
+        "operationId": "submitPublicForm",
+        "parameters": [
+          {
+            "description": "The raw session token from session creation.",
+            "in": "header",
+            "name": "X-Form-Session",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "answers": {
+                    "additionalProperties": {},
+                    "type": "object",
+                  },
+                },
+                "required": [
+                  "answers",
+                ],
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "submissionId": {
+                      "format": "uuid",
+                      "type": "string",
+                    },
+                    "submitted": {
+                      "enum": [
+                        true,
+                      ],
+                      "type": "boolean",
+                    },
+                  },
+                  "required": [
+                    "submitted",
+                    "submissionId",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "The idempotent receipt (first submit or a retry/race loser)",
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                    },
+                    "detail": {
+                      "type": "string",
+                    },
+                    "errors": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "code": {
+                            "type": "string",
+                          },
+                          "message": {
+                            "type": "string",
+                          },
+                          "path": {
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "path",
+                          "code",
+                          "message",
+                        ],
+                        "type": "object",
+                      },
+                      "type": "array",
+                    },
+                    "status": {
+                      "type": "integer",
+                    },
+                    "title": {
+                      "type": "string",
+                    },
+                    "type": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Missing X-Form-Session header (\`session_required\`)",
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                    },
+                    "detail": {
+                      "type": "string",
+                    },
+                    "errors": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "code": {
+                            "type": "string",
+                          },
+                          "message": {
+                            "type": "string",
+                          },
+                          "path": {
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "path",
+                          "code",
+                          "message",
+                        ],
+                        "type": "object",
+                      },
+                      "type": "array",
+                    },
+                    "status": {
+                      "type": "integer",
+                    },
+                    "title": {
+                      "type": "string",
+                    },
+                    "type": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Unknown session token (\`session_not_found\`)",
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                    },
+                    "detail": {
+                      "type": "string",
+                    },
+                    "errors": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "code": {
+                            "type": "string",
+                          },
+                          "message": {
+                            "type": "string",
+                          },
+                          "path": {
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "path",
+                          "code",
+                          "message",
+                        ],
+                        "type": "object",
+                      },
+                      "type": "array",
+                    },
+                    "status": {
+                      "type": "integer",
+                    },
+                    "title": {
+                      "type": "string",
+                    },
+                    "type": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Form closed or deleted (\`form_closed\`), per-form submission cap reached (\`form_full\`), or a completed session without a stored submission (\`session_completed\`)",
+          },
+          "410": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                    },
+                    "detail": {
+                      "type": "string",
+                    },
+                    "errors": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "code": {
+                            "type": "string",
+                          },
+                          "message": {
+                            "type": "string",
+                          },
+                          "path": {
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "path",
+                          "code",
+                          "message",
+                        ],
+                        "type": "object",
+                      },
+                      "type": "array",
+                    },
+                    "status": {
+                      "type": "integer",
+                    },
+                    "title": {
+                      "type": "string",
+                    },
+                    "type": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Session expired beyond the 5-minute grace window (\`session_expired\`)",
+          },
+          "413": {
+            "description": "Body exceeds the route's configured 150 KB JSON limit",
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                    },
+                    "detail": {
+                      "type": "string",
+                    },
+                    "errors": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "code": {
+                            "type": "string",
+                          },
+                          "message": {
+                            "type": "string",
+                          },
+                          "path": {
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "path",
+                          "code",
+                          "message",
+                        ],
+                        "type": "object",
+                      },
+                      "type": "array",
+                    },
+                    "status": {
+                      "type": "integer",
+                    },
+                    "title": {
+                      "type": "string",
+                    },
+                    "type": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Answer validation against the pinned schema failed (\`validation_failed\` with per-answer codes: \`unknown_block_id\`, \`answer_to_non_question\`, \`required_answer_missing\`, \`answer_too_long\`, \`invalid_character\`, \`submission_too_large\`, \`invalid_answer_type\`)",
+          },
+          "429": {
+            "description": "Session-creation limit exhausted on the paired session route (\`rate_limited\`)",
+          },
+        },
+        "summary": "Submit answers for a public session (UNauthenticated, cookie-less)",
         "tags": [
           "forms",
         ],
