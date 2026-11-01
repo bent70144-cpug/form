@@ -107,6 +107,40 @@ export const en = {
       },
       validationHeading: "Fix these issues before the draft can save:",
     },
+    /**
+     * Publish controls (ticket 09): status line, Publish / Republish /
+     * Unpublish, copy-link, closed note and the worst-case size warning.
+     * Publish-time 422 issue codes resolve through `errors.schemaIssues`
+     * (shared with draft saves); anything unmapped falls back to
+     * `dashboard.publish.issueFallback`.
+     */
+    publish: {
+      statusLabel: "Status",
+      status: {
+        draft: "Draft",
+        published: "Published",
+        closed: "Closed",
+      },
+      publishedVersion: "Published version {version}",
+      publish: "Publish",
+      publishing: "Publishing…",
+      republish: "Republish",
+      republishing: "Republishing…",
+      unpublish: "Unpublish",
+      unpublishing: "Unpublishing…",
+      publishFailed: "Publishing failed. Please try again.",
+      unpublishFailed: "Unpublishing failed. Please try again.",
+      validationHeading: "Fix these issues before publishing:",
+      issueFallback: "This form cannot be published yet.",
+      closedMessage:
+        "This form is closed and not accepting responses. Republish to reopen it.",
+      publicLinkHeading: "Public link",
+      copyLink: "Copy link",
+      copied: "Copied!",
+      openPublicPage: "Open public page",
+      worstCaseWarning:
+        "Warning: worst-case answers ({worst} KB) exceed the {cap} KB submission cap — oversized submissions will be rejected.",
+    },
   },
   auth: {
     signIn: {
