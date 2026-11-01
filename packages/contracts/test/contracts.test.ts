@@ -4,13 +4,29 @@ import {
   bootstrapRequestSchema,
   bootstrapResponseSchema,
   buildOpenApiDocument,
+  createFormRequestSchema,
+  createFormResponseSchema,
   fieldErrorSchema,
+  formDetailSchema,
+  formDraftSchemaSchema,
   healthResponseSchema,
+  listFormsResponseSchema,
   problemDetailsSchema,
   problemType,
+  renameFormRequestSchema,
   sessionResponseSchema,
   workspaceSchema,
 } from "../src/index";
+
+/** The exact M0 empty envelope (form-schema's emptyDraft()). */
+const EMPTY_DRAFT = {
+  schemaVersion: 1,
+  title: "",
+  blocks: [],
+  logic: [],
+  theme: { preset: "default" },
+  settings: {},
+};
 
 describe("contracts", () => {
   it("validates the health response shape", () => {
@@ -91,6 +107,82 @@ describe("contracts", () => {
         workspace,
       }).success,
     ).toBe(true);
+  });
+
+  it("validates the form create/list/rename contracts (ticket 06)", () => {
+    const formId = "018f0b2e-6f7a-7c3e-9a1b-2c3d4e5f6a7b";
+    const projectId = "018f0b2e-6f7a-7c3e-9a1b-2c3d4e5f6a7c";
+    const now = new Date().toISOString();
+
+    // Create: body is optional (an empty object is valid — server-side
+    // default name); a name must be 1..200 chars.
+    expect(createFormRequestSchema.safeParse({}).success).toBe(true);
+    expect(createFormRequestSchema.safeParse({ name: "Client intake" }).success).toBe(true);
+    expect(createFormRequestSchema.safeParse({ name: "" }).success).toBe(false);
+    expect(createFormRequestSchema.safeParse({ name: "x".repeat(201) }).success).toBe(false);
+    expect(createFormRequestSchema.safeParse({ projectId }).success).toBe(false);
+
+    // The empty draft envelope validates as the wire DTO.
+    expect(formDraftSchemaSchema.safeParse(EMPTY_DRAFT).success).toBe(true);
+    expect(formDraftSchemaSchema.safeParse({ ...EMPTY_DRAFT, extra: 1 }).success).toBe(false);
+
+    // Create response: form + draft (draftVersion 0, empty envelope).
+    const detail = {
+      id: formId,
+      name: "Untitled form",
+      status: "draft",
+      projectId,
+      createdAt: now,
+      updatedAt: now,
+      draft: { draftVersion: 0, schema: EMPTY_DRAFT },
+    };
+    expect(formDetailSchema.safeParse(detail).success).toBe(true);
+    expect(createFormResponseSchema.safeParse(detail).success).toBe(true);
+    expect(
+      formDetailSchema.safeParse({ ...detail, draft: { draftVersion: -1, schema: EMPTY_DRAFT } })
+        .success,
+    ).toBe(false);
+    expect(
+      formDetailSchema.safeParse({ ...detail, status: "archived" }).success,
+    ).toBe(false);
+
+    // List: page of summaries + nullable cursor.
+    expect(
+      listFormsResponseSchema.safeParse({
+        forms: [
+          {
+            id: formId,
+            name: "Untitled form",
+            status: "draft",
+            createdAt: now,
+            updatedAt: now,
+          },
+        ],
+        nextCursor: null,
+      }).success,
+    ).toBe(true);
+    expect(
+      listFormsResponseSchema.safeParse({ forms: [], nextCursor: "abc" }).success,
+    ).toBe(true);
+
+    // Rename: name required, 1..200.
+    expect(renameFormRequestSchema.safeParse({ name: "Client intake" }).success).toBe(true);
+    expect(renameFormRequestSchema.safeParse({}).success).toBe(false);
+    expect(renameFormRequestSchema.safeParse({ name: "" }).success).toBe(false);
+  });
+
+  it("exposes the form endpoints in the document (ticket 06)", () => {
+    const doc = buildOpenApiDocument() as {
+      paths: Record<string, Record<string, { operationId?: string }>>;
+      tags: Array<{ name: string }>;
+    };
+    expect(doc.paths["/v1/forms"]?.post?.operationId).toBe("createForm");
+    expect(doc.paths["/v1/forms"]?.get?.operationId).toBe("listForms");
+    expect(doc.paths["/v1/forms/{formId}"]?.get?.operationId).toBe("getForm");
+    expect(doc.paths["/v1/forms/{formId}/name"]?.patch?.operationId).toBe(
+      "renameForm",
+    );
+    expect(doc.tags.map((tag) => tag.name)).toContain("forms");
   });
 });
 

@@ -44,6 +44,9 @@ importers:
       '@form/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@form/form-schema':
+        specifier: workspace:*
+        version: link:../../packages/form-schema
       '@form/i18n':
         specifier: workspace:*
         version: link:../../packages/i18n

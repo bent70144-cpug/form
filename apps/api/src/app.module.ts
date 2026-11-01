@@ -12,6 +12,8 @@ import { APP_DB_POOL } from "./db/app-db";
 import { WorkspaceService } from "./workspaces/workspace.service";
 import { WorkspaceBootstrapController } from "./workspaces/bootstrap.controller";
 import { TenantRequestContextInterceptor } from "./workspaces/tenant-context.interceptor";
+import { FormsService } from "./forms/forms.service";
+import { FormsController } from "./forms/forms.controller";
 
 /**
  * Root NestJS module. Auth-dependent providers arrive through the
@@ -28,6 +30,10 @@ import { TenantRequestContextInterceptor } from "./workspaces/tenant-context.int
  * `POST /v1/workspaces/bootstrap` controller, and the
  * `TenantRequestContextInterceptor` (registered as a provider so
  * `@UseInterceptors(TenantRequestContextInterceptor)` resolves it with DI).
+ *
+ * Ticket 06 adds the first FULL-context domain routes: `FormsController`
+ * (create/list/read/rename) with `FormsService` — every route carries
+ * `@RequireWorkspaceContext()` and receives the interceptor's `TenantDb`.
  */
 @Module({})
 export class AppModule {
@@ -42,12 +48,14 @@ export class AppModule {
         EmailVerifiedGuard,
         WorkspaceService,
         TenantRequestContextInterceptor,
+        FormsService,
       ],
       controllers: [
         HealthController,
         SessionController,
         VerifiedProbeController,
         WorkspaceBootstrapController,
+        FormsController,
       ],
     };
   }

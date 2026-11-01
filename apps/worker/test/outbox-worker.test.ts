@@ -14,6 +14,7 @@ import {
   OUTBOX_DISPATCH_JOB,
   startWorker,
 } from "../src/index";
+import { FORM_CREATED_EVENT } from "../src/handlers/form-created";
 import { grantPgBossRuntimeRole } from "@form/queue";
 
 /**
@@ -70,6 +71,21 @@ async function insertWorkspaceCreated(payload: {
   return id;
 }
 
+/** Ticket 06: the API inserts form.created with the same payload family. */
+async function insertFormCreated(payload: {
+  workspaceId: string;
+  formId: string;
+  userId: string;
+}): Promise<string> {
+  const id = uuidv7();
+  await appPool.query(
+    `INSERT INTO app.outbox_events (id, event_type, payload)
+     VALUES ($1, 'form.created', $2::jsonb)`,
+    [id, JSON.stringify(payload)],
+  );
+  return id;
+}
+
 describe("worker: outbox dispatcher slice", () => {
   it("defaults the dispatch cadence to 30s (T02 Neon strategy)", () => {
     expect(DEFAULT_DISPATCH_INTERVAL_MS).toBe(30_000);
@@ -110,6 +126,49 @@ describe("worker: outbox dispatcher slice", () => {
       );
       expect(handlerLine).toBeDefined();
       expect(handlerLine!["outboxEventId"]).toBe(id);
+      expect(handlerLine!["workspaceId"]).toBeTypeOf("string");
+    } finally {
+      await worker.stop();
+    }
+  }, 30_000);
+
+  it("processes a form.created event through the default handler (ticket 06)", async () => {
+    const id = await insertFormCreated({
+      workspaceId: uuidv7(),
+      formId: uuidv7(),
+      userId: uuidv7(),
+    });
+
+    const logLines: Array<Record<string, unknown>> = [];
+    const worker = await startWorker({
+      databaseUrl: urls.workerUrl,
+      heartbeatIntervalMs: 30_000,
+      dispatchIntervalMs: 1_000,
+      logger: {
+        ...silentLogger,
+        info: (line) => logLines.push(line),
+      },
+    });
+
+    try {
+      const deadline = Date.now() + 20_000;
+      let processed = false;
+      while (Date.now() < deadline && !processed) {
+        const res = await adminClient.query<{ processed_at: string | null }>(
+          "SELECT processed_at FROM app.outbox_events WHERE id = $1",
+          [id],
+        );
+        processed = res.rows[0]?.processed_at != null;
+        if (!processed) await new Promise((r) => setTimeout(r, 200));
+      }
+      expect(processed).toBe(true);
+
+      const handlerLine = logLines.find(
+        (line) => line["event"] === "outbox.form_created",
+      );
+      expect(handlerLine).toBeDefined();
+      expect(handlerLine!["outboxEventId"]).toBe(id);
+      expect(handlerLine!["formId"]).toBeTypeOf("string");
       expect(handlerLine!["workspaceId"]).toBeTypeOf("string");
     } finally {
       await worker.stop();
