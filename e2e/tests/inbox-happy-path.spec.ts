@@ -49,6 +49,10 @@ const state: {
 } = { email: "", formName: "", publicUrl: "", slug: "" };
 
 async function openFormFromDashboard(page: Page): Promise<void> {
+  // Every test gets a FRESH browser context (isolated cookie jar) even in
+  // serial mode, so each test must establish its own session before
+  // navigating the dashboard.
+  await signIn(page, state.email, PASSWORD);
   await page.goto("/dashboard");
   await page.getByRole("link", { name: state.formName }).click();
   await expect(page.getByRole("heading", { name: state.formName, level: 1 })).toBeVisible();
