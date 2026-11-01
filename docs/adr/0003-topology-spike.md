@@ -64,7 +64,10 @@ DML grants.
 
 ## pg-boss heartbeat: interval and skip-migration findings
 
-- **Interval: 30 s** (`*/30 * * * * *`, `DEFAULT_HEARTBEAT_INTERVAL_MS = 30_000`).
+- **Interval: 30 s** (`*/30 * * * * *`, `HEARTBEAT_INTERVAL_MS` default
+  `30_000` in `packages/config/src/env.ts` — the worker entrypoint validates
+  it with `workerEnvSchema` and wires it to both the heartbeat and the
+  outbox-dispatch cadence).
   A 30 s recurring schedule **does keep Neon awake** (Neon free suspends after
   ~5 min idle), which is the chosen alpha trade-off: bounded dispatch latency
   and simple scheduling over compute-idle savings. The documented alternative

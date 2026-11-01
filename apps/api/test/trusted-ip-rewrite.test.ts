@@ -3,6 +3,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import net from "node:net";
 import path from "node:path";
 import { loadApiEnv } from "../src/env";
+import { buildChildEnv } from "../../../scripts/supervisor.mjs";
 import { createApiApp } from "../src/app";
 
 /**
@@ -114,9 +115,12 @@ beforeAll(async () => {
     {
       cwd: WEB_ROOT,
       env: {
-        ...process.env,
-        NODE_ENV: "development",
-        NEXT_TELEMETRY_DISABLED: "1",
+        ...buildChildEnv("web", {
+          ...process.env,
+          NODE_ENV: "development",
+          NEXT_TELEMETRY_DISABLED: "1",
+          API_INTERNAL_URL: `http://127.0.0.1:${apiPort}`,
+        }),
         API_INTERNAL_URL: `http://127.0.0.1:${apiPort}`,
       },
       stdio: ["ignore", "ignore", "pipe"],

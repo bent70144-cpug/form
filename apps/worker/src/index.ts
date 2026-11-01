@@ -1,4 +1,5 @@
 import pino from "pino";
+import { loadEnv, workerEnvSchema, type WorkerEnv } from "@form/config";
 import { createPool } from "@form/database";
 import {
   PgBossJobQueue,
@@ -33,21 +34,28 @@ export { installPgBossSchema };
  *   installed by the migrator (production: a migration; local dev/test: the
  *   migrator-role bootstrap step — `installPgBossSchema`).
  * - The heartbeat is a recurring pg-boss schedule (ticket 02) and the outbox
- *   dispatcher reuses exactly this mechanism (ticket 05): interval 30s — the
- *   chosen compromise between Neon suspend-awake churn and dispatch latency.
+ *   dispatch reuses exactly this mechanism (ticket 05): both tick at
+ *   HEARTBEAT_INTERVAL_MS (default 30s) — the chosen compromise between Neon
+ *   suspend-awake churn and dispatch latency.
  * - Both queues are created with the `singleton` policy so a slow tick never
  *   stacks with the next one.
  *
- * Runtime environment: WORKER_DATABASE_URL (+ LOG_LEVEL) only.
+ * Runtime environment: WORKER_DATABASE_URL (+ LOG_LEVEL,
+ * HEARTBEAT_INTERVAL_MS), Zod-validated at startup via workerEnvSchema —
+ * an invalid/missing variable aborts the process before any work.
  */
 
 export interface WorkerOptions {
   databaseUrl: string;
-  /** Heartbeat cadence in milliseconds (default 30_000). */
+  /** Heartbeat cadence in milliseconds (default 30_000).
+   *  The `main` entrypoint wires this to HEARTBEAT_INTERVAL_MS. */
   heartbeatIntervalMs?: number;
-  /** Outbox dispatch cadence in milliseconds (default 30_000). */
+  /** Outbox dispatch cadence in milliseconds (default 30_000).
+   *  The `main` entrypoint wires this to HEARTBEAT_INTERVAL_MS too — the
+   *  single env source of truth for both cadences (ADR-0003/0005). */
   dispatchIntervalMs?: number;
-  /** Log level (default: LOG_LEVEL env, else "info"). */
+  /** Log level (default "info"; the main entrypoint passes the validated
+   *  LOG_LEVEL env value). */
   logLevel?: string;
   /** Structured logger (default: pino on stdout). */
   logger?: OutboxLogger;
@@ -91,7 +99,9 @@ export async function startWorker(options: WorkerOptions): Promise<StartedWorker
   const logger: OutboxLogger =
     options.logger ??
     pino({
-      level: options.logLevel ?? process.env.LOG_LEVEL ?? "info",
+      // The main entrypoint validates the environment and passes LOG_LEVEL
+      // through; programmatic callers (tests) pass logLevel or a logger.
+      level: options.logLevel ?? "info",
     });
 
   // The dispatcher pool: worker_user over the DIRECT URL. tenantGuard is off
@@ -168,15 +178,27 @@ export async function startWorker(options: WorkerOptions): Promise<StartedWorker
 
 const isMain = process.argv[1]?.endsWith("src/index.ts");
 if (isMain) {
-  const databaseUrl = process.env.WORKER_DATABASE_URL;
-  if (!databaseUrl) {
-    process.stderr.write("[worker] WORKER_DATABASE_URL is required\n");
+  // Fail fast on an invalid environment (spec: Zod-validated, fails at
+  // startup) — before ANY work, mirroring the api/web entrypoints.
+  let env: WorkerEnv;
+  try {
+    env = loadEnv(workerEnvSchema);
+  } catch (error) {
+    process.stderr.write(
+      `[worker] ${(error instanceof Error ? error.message : String(error))}\n`,
+    );
     process.exit(1);
   }
 
   let stopping = false;
   void (async () => {
-    const worker = await startWorker({ databaseUrl });
+    const worker = await startWorker({
+      databaseUrl: env.WORKER_DATABASE_URL,
+      // HEARTBEAT_INTERVAL_MS drives BOTH cadences (ADR-0003/0005).
+      heartbeatIntervalMs: env.HEARTBEAT_INTERVAL_MS,
+      dispatchIntervalMs: env.HEARTBEAT_INTERVAL_MS,
+      logLevel: env.LOG_LEVEL,
+    });
     const shutdown = async () => {
       if (stopping) return;
       stopping = true;

@@ -10,13 +10,13 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@form/config": "workspace:*",
     "@form/database": "workspace:*",
     "@form/queue": "workspace:*",
     "pg-boss": "12.38.0",
     "pino": "^9.5.0"
   },
   "devDependencies": {
-    "@form/config": "workspace:*",
     "@types/node": "^22.10.2",
     "pg": "^8.13.1",
     "@types/pg": "^8.11.10",
