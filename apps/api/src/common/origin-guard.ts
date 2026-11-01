@@ -36,14 +36,26 @@ export const ORIGIN_EXEMPT_PATHS: readonly string[] = [
   // the allowlist is reviewed in one place. They must stay cookie-less.
   "/v1/public/submissions",
   "/v1/public/sessions",
+  // Ticket 09: the public render path is variable-segment shaped, so it is
+  // matched by PUBLIC_FORM_READ_RE below rather than listed verbatim.
 ];
 
 /** Public form session creation: POST /v1/public/forms/{slug}/sessions (T05+). */
 export const PUBLIC_FORM_SESSION_RE = /^\/v1\/public\/forms\/[^/]+\/sessions$/;
 
+/**
+ * Public form render path (ticket 09): /v1/public/forms/{slug} — cookie-less
+ * and UNauthenticated. GET is already exempt as a safe method; the entry makes
+ * the whole path's cookie-less contract explicit (a future password gate may
+ * POST here) and keeps the public allowlist reviewable in one place.
+ */
+export const PUBLIC_FORM_READ_RE = /^\/v1\/public\/forms\/[^/]+$/;
+
 export function isExemptFromOriginCheck(pathname: string): boolean {
   return (
-    ORIGIN_EXEMPT_PATHS.includes(pathname) || PUBLIC_FORM_SESSION_RE.test(pathname)
+    ORIGIN_EXEMPT_PATHS.includes(pathname) ||
+    PUBLIC_FORM_SESSION_RE.test(pathname) ||
+    PUBLIC_FORM_READ_RE.test(pathname)
   );
 }
 

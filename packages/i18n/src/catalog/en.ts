@@ -208,6 +208,16 @@ export const en = {
         "No active workspace yet. Call POST /v1/workspaces/bootstrap to create your personal workspace.",
     },
   },
+  public: {
+    form: {
+      closedTitle: "This form is closed",
+      closedDetail:
+        "This form is not accepting responses right now. Check back later.",
+      requiredMark: "required",
+      optionalMark: "optional",
+      formTitleFallback: "Form",
+    },
+  },
 } as const;
 
 export type Catalog = typeof en;

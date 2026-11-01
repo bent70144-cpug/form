@@ -17,6 +17,11 @@ import {
   renameFormRequestSchema,
   renameFormResponseSchema,
 } from "./schemas/form";
+import {
+  publishResponseSchema,
+  publicFormResponseSchema,
+  unpublishResponseSchema,
+} from "./schemas/publish";
 
 /**
  * OpenAPI 3.1 document generated from the shared Zod contracts (spec: "a
@@ -377,6 +382,140 @@ export function buildOpenApiDocument(): Record<string, unknown> {
           },
         },
       },
+      "/v1/forms/{formId}/publish": {
+        post: {
+          operationId: "publishForm",
+          tags: ["forms"],
+          summary: "Publish (or republish) the form as a new immutable version",
+          description:
+            "ONE transaction: locks the form row (SELECT … FOR UPDATE), re-runs the FULL publish validation, allocates the next version number, inserts the immutable form_versions snapshot, updates the published pointer and status to `published`, registers the public slug on first publish (`register_form_slug`, 10-char base62; reserved words rejected), and writes the `form.published` audit row and outbox event. Validation failures answer 422 with the engine's stable codes and persist NOTHING; an injected failure rolls back everything; concurrent publishes serialize on the form row. The first publish allocates the public slug; republishes keep it. Response carries worstCaseBytes/submissionCapBytes so the dashboard can render the publish-time size warning.",
+          parameters: [
+            {
+              name: "formId",
+              in: "path",
+              required: true,
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Published — the immutable version + public slug + size-warning numbers",
+              content: {
+                "application/json": {
+                  schema: zodToJsonSchema(publishResponseSchema, {
+                    target: "openApi3",
+                  }),
+                },
+              },
+            },
+            "401": {
+              description: "Absent, invalid, expired, or revoked session",
+            },
+            "403": {
+              description:
+                "Email not verified, Origin mismatch, or no workspace yet (`forbidden`)",
+            },
+            "404": {
+              description:
+                "Unknown id or a form of another workspace (`not_found`)",
+            },
+            "422": {
+              description:
+                "Draft fails publish validation (`no_question_blocks`, `empty_label`, `welcome_not_first`, `ending_not_last`, `duplicate_block_id`, `multiple_welcome_blocks`, `multiple_ending_blocks`, limits, ...) — nothing is persisted",
+              content: {
+                "application/problem+json": {
+                  schema: zodToJsonSchema(problemDetailsSchema, {
+                    target: "openApi3",
+                  }),
+                },
+              },
+            },
+          },
+        },
+      },
+      "/v1/forms/{formId}/unpublish": {
+        post: {
+          operationId: "unpublishForm",
+          tags: ["forms"],
+          summary: "Unpublish the form — it reads as closed to respondents",
+          description:
+            "Sets the form status to `closed` and writes the `form.unpublished` audit row and outbox event in the same transaction. Republishing reopens the form with a new immutable version. Cross-workspace or unknown ids answer 404.",
+          parameters: [
+            {
+              name: "formId",
+              in: "path",
+              required: true,
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "The form is closed",
+              content: {
+                "application/json": {
+                  schema: zodToJsonSchema(unpublishResponseSchema, {
+                    target: "openApi3",
+                  }),
+                },
+              },
+            },
+            "401": {
+              description: "Absent, invalid, expired, or revoked session",
+            },
+            "403": {
+              description:
+                "Email not verified, Origin mismatch, or no workspace yet (`forbidden`)",
+            },
+            "404": {
+              description:
+                "Unknown id or a form of another workspace (`not_found`)",
+            },
+          },
+        },
+      },
+      "/v1/public/forms/{slug}": {
+        get: {
+          operationId: "getPublicForm",
+          tags: ["forms"],
+          summary:
+            "Read the published form by public slug (UNauthenticated, cookie-less)",
+          description:
+            "Wraps the security-definer `get_published_form(slug)` as app_user (cross-tenant by design; the slug registry is not directly readable). `published` → 200 with the immutable snapshot; `closed` (unpublished or soft-deleted) → 200 closed; `redirect` (superseded slug) → 308 Location /f/{canonicalSlug}; `not_found` → 404. Every response sends `Cache-Control: no-store`. Drafts are structurally unreachable. A future password gate sits in front of this endpoint.",
+          parameters: [
+            {
+              name: "slug",
+              in: "path",
+              required: true,
+              schema: { type: "string", pattern: "^[A-Za-z0-9]{10}$" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Published snapshot or the closed state",
+              content: {
+                "application/json": {
+                  schema: zodToJsonSchema(publicFormResponseSchema, {
+                    target: "openApi3",
+                  }),
+                },
+              },
+            },
+            "308": {
+              description: "Superseded slug — permanent redirect to /f/{canonicalSlug}",
+            },
+            "404": {
+              description: "Unknown slug (`not_found`)",
+              content: {
+                "application/problem+json": {
+                  schema: zodToJsonSchema(problemDetailsSchema, {
+                    target: "openApi3",
+                  }),
+                },
+              },
+            },
+          },
+        },
+      },
       "/v1/forms/{formId}/draft": {
         put: {
           operationId: "saveFormDraft",
@@ -481,6 +620,15 @@ export function buildOpenApiDocument(): Record<string, unknown> {
           target: "openApi3",
         }),
         DraftSaveResponse: zodToJsonSchema(draftSaveResponseSchema, {
+          target: "openApi3",
+        }),
+        PublishResponse: zodToJsonSchema(publishResponseSchema, {
+          target: "openApi3",
+        }),
+        UnpublishResponse: zodToJsonSchema(unpublishResponseSchema, {
+          target: "openApi3",
+        }),
+        PublicFormResponse: zodToJsonSchema(publicFormResponseSchema, {
           target: "openApi3",
         }),
       },

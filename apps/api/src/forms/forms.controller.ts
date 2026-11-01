@@ -306,7 +306,11 @@ const SCHEMA_ISSUE_MESSAGE_KEYS = new Map<IssueCode, MessageKey>(
   ISSUE_CODES.map((code) => [code, `errors.schemaIssues.${code}` as MessageKey]),
 );
 
-function schemaIssueMessage(code: Issue["code"]): string {
+/**
+ * i18n message for a stable form-schema issue code. Shared with the publish
+ * controller (ticket 09) so both wire the same codes → messages mapping.
+ */
+export function schemaIssueMessage(code: Issue["code"]): string {
   const key = SCHEMA_ISSUE_MESSAGE_KEYS.get(code);
   // Catalog drift is a programming error — t() throws on a missing key.
   return key ? t(key) : t("errors.validation.title");
