@@ -179,7 +179,7 @@ describe("contracts", () => {
     expect(doc.paths["/v1/forms"]?.post?.operationId).toBe("createForm");
     expect(doc.paths["/v1/forms"]?.get?.operationId).toBe("listForms");
     expect(doc.paths["/v1/forms/{formId}"]?.get?.operationId).toBe("getForm");
-    expect(doc.paths["/v1/forms/{formId}/name"]?.patch?.operationId).toBe(
+    expect(doc.paths["/v1/forms/{formId}"]?.patch?.operationId).toBe(
       "renameForm",
     );
     expect(doc.tags.map((tag) => tag.name)).toContain("forms");

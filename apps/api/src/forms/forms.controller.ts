@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   HttpCode,
+  Inject,
   Param,
   Patch,
   Post,
@@ -47,7 +48,7 @@ import { FormsService } from "./forms.service";
  *   GET    /v1/forms             list, cursor pagination (default 20, max
  *                                100), newest first by (created_at, id)
  *   GET    /v1/forms/{id}        read form + draft (draftVersion + envelope)
- *   PATCH  /v1/forms/{id}/name   rename the DASHBOARD label only
+ *   PATCH  /v1/forms/{id}        rename the DASHBOARD label only
  *
  * Every route requires a verified email (`EmailVerifiedGuard` — 401
  * `unauthenticated` / 403 `email_unverified`) and the FULL tenant context
@@ -62,7 +63,11 @@ import { FormsService } from "./forms.service";
 @UseGuards(EmailVerifiedGuard)
 @UseInterceptors(TenantRequestContextInterceptor)
 export class FormsController {
-  constructor(private readonly forms: FormsService) {}
+  // Explicit @Inject keeps constructor DI working in both the vitest/esbuild
+  // pipeline and the tsc production build (same pattern as EmailVerifiedGuard).
+  constructor(
+    @Inject(FormsService) private readonly forms: FormsService,
+  ) {}
 
   @Post()
   @HttpCode(201)
@@ -146,7 +151,7 @@ export class FormsController {
     res.json(detail);
   }
 
-  @Patch(":formId/name")
+  @Patch(":formId")
   @RequireVerifiedEmail()
   @RequireWorkspaceContext()
   async rename(

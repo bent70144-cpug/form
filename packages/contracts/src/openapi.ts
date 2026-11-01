@@ -323,8 +323,6 @@ export function buildOpenApiDocument(): Record<string, unknown> {
             },
           },
         },
-      },
-      "/v1/forms/{formId}/name": {
         patch: {
           operationId: "renameForm",
           tags: ["forms"],

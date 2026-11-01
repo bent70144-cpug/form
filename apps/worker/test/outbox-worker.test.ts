@@ -80,8 +80,8 @@ async function insertFormCreated(payload: {
   const id = uuidv7();
   await appPool.query(
     `INSERT INTO app.outbox_events (id, event_type, payload)
-     VALUES ($1, 'form.created', $2::jsonb)`,
-    [id, JSON.stringify(payload)],
+     VALUES ($1, $2, $3::jsonb)`,
+    [id, FORM_CREATED_EVENT, JSON.stringify(payload)],
   );
   return id;
 }
@@ -151,15 +151,22 @@ describe("worker: outbox dispatcher slice", () => {
     });
 
     try {
+      // The 1s cron cadence is the production safety net, but pg-boss 12.38
+      // throttles an ALREADY-REGISTERED schedule to one job per 60s slot —
+      // this is the file's second worker start, so a bare wait races a slot
+      // boundary. Drive ticks through the documented low-latency path
+      // instead (ADR 0005): enqueue the dispatch job directly. The singleton
+      // policy keeps overlapping ticks from stacking.
       const deadline = Date.now() + 20_000;
       let processed = false;
       while (Date.now() < deadline && !processed) {
+        await worker.queue.enqueue(OUTBOX_DISPATCH_JOB, {});
         const res = await adminClient.query<{ processed_at: string | null }>(
           "SELECT processed_at FROM app.outbox_events WHERE id = $1",
           [id],
         );
         processed = res.rows[0]?.processed_at != null;
-        if (!processed) await new Promise((r) => setTimeout(r, 200));
+        if (!processed) await new Promise((r) => setTimeout(r, 500));
       }
       expect(processed).toBe(true);
 

@@ -6,7 +6,7 @@ import { t } from "@form/i18n";
 import { renameDashboardForm } from "../../lib/forms-client";
 
 /**
- * Dashboard rename control (ticket 06). PATCHes `/v1/forms/{id}/name` — the
+ * Dashboard rename control (ticket 06). PATCHes `/v1/forms/{id}` — the
  * DASHBOARD label (`forms.name`) only; the respondent-facing title lives in
  * the draft envelope and is edited by the builder (ticket 08). Client-side
  * because the PATCH is state-changing and must carry the browser's Origin

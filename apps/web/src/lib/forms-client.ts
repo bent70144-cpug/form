@@ -11,7 +11,7 @@
  *   caller, workspace, default project and the default dashboard label) and
  *   returns the created form's id so the caller can navigate to
  *   /dashboard/forms/{id}.
- * - `renameDashboardForm` PATCHes `/v1/forms/{id}/name` — the DASHBOARD
+ * - `renameDashboardForm` PATCHes `/v1/forms/{id}` — the DASHBOARD
  *   label (`forms.name`) only; the respondent-facing title lives in the
  *   draft envelope (builder, ticket 08).
  *
@@ -53,7 +53,7 @@ export async function renameDashboardForm(
 ): Promise<boolean> {
   const doFetch = options.fetchImpl ?? fetch;
   try {
-    const res = await doFetch(`/v1/forms/${formId}/name`, {
+    const res = await doFetch(`/v1/forms/${formId}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       credentials: "same-origin",

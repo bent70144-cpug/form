@@ -146,10 +146,10 @@ export const listFormsResponseSchema = z.object({
 export type ListFormsResponse = z.infer<typeof listFormsResponseSchema>;
 
 /**
- * `PATCH /v1/forms/{id}/name` — renames the DASHBOARD label only
- * (`forms.name`); the respondent-facing title in the draft envelope is
- * untouched. 404 when the form does not exist in the active workspace
- * (cross-tenant access is never distinguished from a missing row).
+ * `PATCH /v1/forms/{id}` — renames the DASHBOARD label only (`forms.name`);
+ * the respondent-facing title in the draft envelope is untouched. 404 when
+ * the form does not exist in the active workspace (cross-tenant access is
+ * never distinguished from a missing row).
  */
 export const renameFormRequestSchema = z
   .object({

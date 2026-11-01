@@ -1627,8 +1627,6 @@ exports[`openapi document > matches the committed snapshot 1`] = `
           "forms",
         ],
       },
-    },
-    "/v1/forms/{formId}/name": {
       "patch": {
         "description": "Changes \`forms.name\` ONLY. The respondent-facing title lives in the draft schema envelope and is edited by the builder (ticket 08).",
         "operationId": "renameForm",
