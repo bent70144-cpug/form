@@ -269,4 +269,58 @@ export class FormsService {
     const row = result.rows[0];
     return row ? toSummary(row) : null;
   }
+
+  /**
+   * Draft save (ticket 07): replaces the FULL draft schema atomically with
+   * optimistic concurrency. The version check + increment happen in ONE
+   * UPDATE guarded by `draft_version = expected` — under READ COMMITTED a
+   * concurrent winner's row lock makes the loser's predicate re-evaluate to
+   * zero rows, so another tab's save can never be overwritten (spec: "any
+   * mismatch returns 409 draft_conflict"). The envelope was already migrated
+   * + validated by the shared engine (controller) when it gets here.
+   *
+   * Returns the NEW draft version, `"conflict"` when the caller's version is
+   * stale (→ 409), or null when the form/draft row does not exist in this
+   * workspace (→ 404, never 403 — RLS hides foreign rows).
+   */
+  async saveDraft(
+    tenant: TenantDb,
+    formId: string,
+    userId: string,
+    schema: DraftEnvelope,
+    expectedVersion: number,
+  ): Promise<{ draftVersion: number } | "conflict" | null> {
+    const workspaceId = tenant.context.workspaceId;
+
+    const updated = await tenant.query<{ draft_version: number }>(
+      `UPDATE app.form_drafts d
+          SET "schema" = $3::jsonb,
+              draft_version = d.draft_version + 1,
+              last_edited_by = $4,
+              updated_at = now()
+        WHERE d.workspace_id = $1 AND d.form_id = $2
+          AND d.draft_version = $5
+          AND EXISTS (SELECT 1 FROM app.forms f
+                       WHERE f.workspace_id = d.workspace_id
+                         AND f.id = d.form_id
+                         AND f.deleted_at IS NULL)
+        RETURNING d.draft_version`,
+      [workspaceId, formId, JSON.stringify(schema), userId, expectedVersion],
+    );
+    const row = updated.rows[0];
+    if (row) return { draftVersion: row.draft_version };
+
+    // Zero rows: either a stale version (409) or no such form here (404).
+    const exists = await tenant.query<{ one: number }>(
+      `SELECT 1 AS one
+         FROM app.form_drafts d
+        WHERE d.workspace_id = $1 AND d.form_id = $2
+          AND EXISTS (SELECT 1 FROM app.forms f
+                       WHERE f.workspace_id = d.workspace_id
+                         AND f.id = d.form_id
+                         AND f.deleted_at IS NULL)`,
+      [workspaceId, formId],
+    );
+    return exists.rows[0] ? "conflict" : null;
+  }
 }

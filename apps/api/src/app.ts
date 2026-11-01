@@ -32,7 +32,9 @@ import { loadApiEnv } from "./env";
  *                           (trusted-proxy client IP; ADR-0004)
  *   5. Better Auth mount  — /v1/auth/* (prefix preserved, see mount.ts;
  *                           /v1/auth/session falls through to Nest)
- *   6. Nest router        — /v1/health, /v1/auth/session, /v1/probe/*, future
+ *   6. Draft-save parser  — PUT /v1/forms/{id}/draft gets its own explicit
+ *                           300 KB JSON body parser (ticket 07)
+ *   7. Nest router        — /v1/health, /v1/auth/session, /v1/probe/*, future
  *                           /v1 endpoints
  */
 export async function createApiApp(
@@ -89,12 +91,31 @@ export async function createApiApp(
   const expressApp = nestApp.getHttpAdapter().getInstance() as Express;
 
   expressApp.use(originGuard(env.APP_ORIGIN));
-  expressApp.use(express.json({ limit: "64kb" }));
+  // Body parsing — EVERY limit is explicit, none inherited from an adapter
+  // default (spec: "Draft-save route body limits are set explicitly at about
+  // 300 KB; other routes use small explicit limits"). The global parser stays
+  // at 64 KB (auth mount + all small routes), but the draft-save PUT must not
+  // hit it (it would 413 a ~300 KB body before the route's own parser could
+  // run), so the global parser is wrapped to skip exactly that route.
+  const DRAFT_SAVE_ROUTE = /^\/v1\/forms\/[^/]+\/draft$/;
+  const globalJson = express.json({ limit: "64kb" });
+  const draftSaveJson = express.json({ limit: "300kb" });
+  expressApp.use((req, res, next) => {
+    if (req.method === "PUT" && DRAFT_SAVE_ROUTE.test(req.path)) return next();
+    globalJson(req, res, next);
+  });
   expressApp.use(hopDiagnostics(trustedIpConfig));
   if (options.rateLimits?.enabled !== false) {
     expressApp.use(createRateLimitGuard(rateLimiter, trustedIpConfig));
   }
   expressApp.use(mountBetterAuth(auth));
+
+  // Ticket 07: the draft-save route carries its OWN 300 KB parser, registered
+  // BEFORE the Nest router (it parses the body, then next()s into Nest's
+  // FormsController). body-parser skips already-parsed bodies, so this is the
+  // only parser that ever touches a draft-save request. The 300 KB value is
+  // the configured limit the tests assert (≈301 KB → 413, 250 KB → validated).
+  expressApp.put("/v1/forms/:formId/draft", draftSaveJson);
 
   await nestApp.init();
   // Graceful shutdown: stop accepting connections, close the DB pool so the

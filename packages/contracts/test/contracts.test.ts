@@ -6,6 +6,8 @@ import {
   buildOpenApiDocument,
   createFormRequestSchema,
   createFormResponseSchema,
+  draftSaveRequestSchema,
+  draftSaveResponseSchema,
   fieldErrorSchema,
   formDetailSchema,
   formDraftSchemaSchema,
@@ -64,6 +66,8 @@ describe("contracts", () => {
         "form_full",
         "invalid_character",
         "schema_too_large",
+        "too_many_blocks",
+        "unsupported_schema_version",
         "submission_too_large",
         "rate_limited",
         "internal_error",
@@ -171,6 +175,36 @@ describe("contracts", () => {
     expect(renameFormRequestSchema.safeParse({ name: "" }).success).toBe(false);
   });
 
+  it("validates the draft save contracts (ticket 07)", () => {
+    // Request: { schema, draftVersion }. The envelope's inner shape is
+    // validated by @form/form-schema (stable codes), so the wrapper stays
+    // loose about `schema` — but draftVersion must be a non-negative integer
+    // and no extra keys are allowed.
+    expect(
+      draftSaveRequestSchema.safeParse({ schema: EMPTY_DRAFT, draftVersion: 0 }).success,
+    ).toBe(true);
+    expect(
+      draftSaveRequestSchema.safeParse({ schema: { junk: true }, draftVersion: 42 }).success,
+    ).toBe(true);
+    expect(draftSaveRequestSchema.safeParse({ draftVersion: 0 }).success).toBe(false);
+    expect(draftSaveRequestSchema.safeParse({ schema: EMPTY_DRAFT }).success).toBe(false);
+    expect(
+      draftSaveRequestSchema.safeParse({ schema: EMPTY_DRAFT, draftVersion: -1 }).success,
+    ).toBe(false);
+    expect(
+      draftSaveRequestSchema.safeParse({ schema: EMPTY_DRAFT, draftVersion: 1.5 }).success,
+    ).toBe(false);
+    expect(
+      draftSaveRequestSchema.safeParse({ schema: EMPTY_DRAFT, draftVersion: 0, extra: 1 })
+        .success,
+    ).toBe(false);
+
+    // Response: the NEW draft version, a positive integer.
+    expect(draftSaveResponseSchema.safeParse({ draftVersion: 1 }).success).toBe(true);
+    expect(draftSaveResponseSchema.safeParse({ draftVersion: 0 }).success).toBe(false);
+    expect(draftSaveResponseSchema.safeParse({ draftVersion: 2, extra: true }).success).toBe(false);
+  });
+
   it("exposes the form endpoints in the document (ticket 06)", () => {
     const doc = buildOpenApiDocument() as {
       paths: Record<string, Record<string, { operationId?: string }>>;
@@ -181,6 +215,9 @@ describe("contracts", () => {
     expect(doc.paths["/v1/forms/{formId}"]?.get?.operationId).toBe("getForm");
     expect(doc.paths["/v1/forms/{formId}"]?.patch?.operationId).toBe(
       "renameForm",
+    );
+    expect(doc.paths["/v1/forms/{formId}/draft"]?.put?.operationId).toBe(
+      "saveFormDraft",
     );
     expect(doc.tags.map((tag) => tag.name)).toContain("forms");
   });
