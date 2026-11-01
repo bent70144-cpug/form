@@ -13,6 +13,10 @@ import {
   WORKSPACE_CREATED_EVENT,
   createWorkspaceCreatedHandler,
 } from "./handlers/workspace-created";
+import {
+  FORM_CREATED_EVENT,
+  createFormCreatedHandler,
+} from "./handlers/form-created";
 
 export { installPgBossSchema };
 
@@ -47,7 +51,8 @@ export interface WorkerOptions {
   logLevel?: string;
   /** Structured logger (default: pino on stdout). */
   logger?: OutboxLogger;
-  /** Outbox handlers keyed by event_type (default: workspace.created logger). */
+  /** Outbox handlers keyed by event_type (default: workspace.created +
+   *  form.created loggers). */
   outboxHandlers?: Record<string, OutboxHandler>;
   /** Test hook: receive every heartbeat log line. */
   onHeartbeat?: (line: Record<string, unknown>) => void;
@@ -105,6 +110,7 @@ export async function startWorker(options: WorkerOptions): Promise<StartedWorker
     pool,
     handlers: options.outboxHandlers ?? {
       [WORKSPACE_CREATED_EVENT]: createWorkspaceCreatedHandler(logger),
+      [FORM_CREATED_EVENT]: createFormCreatedHandler(logger),
     },
     logger,
   });

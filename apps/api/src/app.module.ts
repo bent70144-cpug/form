@@ -14,6 +14,8 @@ import { TenantContextInterceptor } from "./workspaces/tenant-interceptor";
 import { WorkspaceService } from "./workspaces/workspace.service";
 import { WorkspaceController } from "./workspaces/bootstrap.controller";
 import { WorkspaceProbeController } from "./workspaces/workspace-probe.controller";
+import { FormsController } from "./forms/forms.controller";
+import { FormsService } from "./forms/forms.service";
 
 /**
  * Root NestJS module. Auth-dependent providers arrive through the
@@ -42,6 +44,7 @@ export class AppModule {
         SessionService,
         EmailVerifiedGuard,
         WorkspaceService,
+        FormsService,
         { provide: APP_INTERCEPTOR, useClass: TenantContextInterceptor },
       ],
       controllers: [
@@ -50,6 +53,7 @@ export class AppModule {
         VerifiedProbeController,
         WorkspaceController,
         WorkspaceProbeController,
+        FormsController,
       ],
     };
   }
