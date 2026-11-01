@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import { createHmac } from "node:crypto";
 import { NestFactory } from "@nestjs/core";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 import type { Express } from "express";
@@ -82,7 +83,14 @@ export async function createApiApp(
   });
 
   const nestApp = await NestFactory.create<NestExpressApplication>(
-    AppModule.withAuth(auth, rateLimiter, dbPool),
+    AppModule.withAuth(auth, rateLimiter, dbPool, {
+      trustedIpConfig,
+      // Ticket 10: HMAC key for the stored session ip_hash. IP_HASH_SECRET is
+      // the production value; in dev/test the auth secret keys the HMAC so
+      // the stored value is still keyed (never a bare reversible hash).
+      ipHashSecret: env.IP_HASH_SECRET ?? createHmac("sha256", env.BETTER_AUTH_SECRET).update("ip-hash-key").digest("hex"),
+      submissionCap: env.FORM_SUBMISSION_CAP,
+    }),
     {
       logger: env.NODE_ENV === "test" ? false : ["log", "warn", "error"],
     },
@@ -98,10 +106,16 @@ export async function createApiApp(
   // hit it (it would 413 a ~300 KB body before the route's own parser could
   // run), so the global parser is wrapped to skip exactly that route.
   const DRAFT_SAVE_ROUTE = /^\/v1\/forms\/[^/]+\/draft$/;
+  const SUBMIT_ROUTE = /^\/v1\/public\/submissions$/;
   const globalJson = express.json({ limit: "64kb" });
   const draftSaveJson = express.json({ limit: "300kb" });
+  // Ticket 10: the submit route carries its own explicit ~150 KB parser
+  // (spec: "the submit route body limit is about 150 KB" — the 100 KB JSON
+  // cap governs before per-field maxima would).
+  const submitJson = express.json({ limit: "150kb" });
   expressApp.use((req, res, next) => {
     if (req.method === "PUT" && DRAFT_SAVE_ROUTE.test(req.path)) return next();
+    if (req.method === "POST" && SUBMIT_ROUTE.test(req.path)) return next();
     globalJson(req, res, next);
   });
   expressApp.use(hopDiagnostics(trustedIpConfig));
@@ -116,6 +130,9 @@ export async function createApiApp(
   // only parser that ever touches a draft-save request. The 300 KB value is
   // the configured limit the tests assert (≈301 KB → 413, 250 KB → validated).
   expressApp.put("/v1/forms/:formId/draft", draftSaveJson);
+  // Ticket 10: same pattern for the submit route (parse first, then next()
+  // into Nest's PublicSubmissionController).
+  expressApp.post("/v1/public/submissions", submitJson);
 
   await nestApp.init();
   // Graceful shutdown: stop accepting connections, close the DB pool so the

@@ -30,6 +30,22 @@ const apiEnvSchema = z.object({
   TRUSTED_PROXY_COUNT: z.coerce.number().int().min(0).max(64).optional(),
   /** Comma-separated forwarded-header names, priority order (left = highest). */
   TRUSTED_PROXY_HEADERS: z.string().min(1).optional(),
+  // --- public sessions + submissions (ticket 10) ---
+  /**
+   * HMAC-SHA256 key for the stored session `ip_hash` (spec: "Stored IP
+   * metadata is an HMAC of the address with a server secret, not a
+   * reversible hash"). Optional in dev/test — when unset the API derives the
+   * key from BETTER_AUTH_SECRET so the stored value is still keyed HMAC, not
+   * a bare hash. Set IP_HASH_SECRET in production (supervisor allowlist).
+   */
+  IP_HASH_SECRET: z.string().min(16).optional(),
+  /**
+   * Per-form submission cap enforced transactionally on the submit route
+   * (spec: "a configurable per-form submission cap (default 1,000 for the
+   * alpha) ... returning 409 form_full when reached"). M0 applies one global
+   * default; per-form overrides arrive with plan features.
+   */
+  FORM_SUBMISSION_CAP: z.coerce.number().int().positive().default(1000),
 });
 
 export type ApiEnv = z.infer<typeof apiEnvSchema>;

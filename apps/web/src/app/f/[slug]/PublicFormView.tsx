@@ -1,11 +1,10 @@
 /**
- * Classic-JSX pragmas + explicit React namespace import: the web tsconfig uses
- * `jsx: "preserve"` (Next/SWC compiles it with the automatic runtime), while
- * the vitest/esbuild pipeline falls back to the classic transform — the pragmas
- * keep BOTH compilers pointing at the same element factory.
+ * JSX compile note: the web tsconfig uses `jsx: "preserve"`, so Next/SWC
+ * compiles this file with the automatic runtime, while the vitest/esbuild
+ * pipeline falls back to the classic transform — the explicit
+ * `import * as React` below satisfies BOTH compilers. No @jsx pragma is set:
+ * Turbopack (Next 16 build) rejects pragmas under the automatic runtime.
  */
-/* @jsx React.createElement */
-/* @jsxFrag React.Fragment */
 import * as React from "react";
 import type { FormBlock } from "@form/contracts";
 import { t } from "@form/i18n";

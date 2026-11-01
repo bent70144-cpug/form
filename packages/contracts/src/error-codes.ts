@@ -18,6 +18,17 @@ export const ErrorCodes = {
   too_many_blocks: "too_many_blocks",
   unsupported_schema_version: "unsupported_schema_version",
   submission_too_large: "submission_too_large",
+  // Ticket 10 — public session/submit discriminators.
+  /** 401 — the X-Form-Session header is missing on the submit route. */
+  session_required: "session_required",
+  /** 404 — unknown (or purged) session token hash. */
+  session_not_found: "session_not_found",
+  /** 410 — expired beyond the 5-minute submission grace window. */
+  session_expired: "session_expired",
+  /** 409 — completed session with no stored submission (data anomaly). */
+  session_completed: "session_completed",
+  /** 409 — unpublished, soft-deleted form, or missing pinned version. */
+  form_closed: "form_closed",
   rate_limited: "rate_limited",
   internal_error: "internal_error",
 } as const;
