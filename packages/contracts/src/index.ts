@@ -5,4 +5,5 @@ export * from "./schemas/workspace";
 export * from "./schemas/form";
 export * from "./schemas/publish";
 export * from "./schemas/public-session";
+export * from "./schemas/submission";
 export * from "./openapi";

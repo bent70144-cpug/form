@@ -15,6 +15,8 @@ import { WorkspaceBootstrapController } from "./workspaces/bootstrap.controller"
 import { TenantRequestContextInterceptor } from "./workspaces/tenant-context.interceptor";
 import { FormsService } from "./forms/forms.service";
 import { FormsController } from "./forms/forms.controller";
+import { SubmissionsService } from "./forms/submissions.service";
+import { SubmissionsController } from "./forms/submissions.controller";
 import { PublishService } from "./forms/publish.service";
 import { PublishController } from "./forms/publish.controller";
 import { PublicFormController } from "./public/public.controller";
@@ -80,6 +82,7 @@ export class AppModule {
         WorkspaceService,
         TenantRequestContextInterceptor,
         FormsService,
+        SubmissionsService,
         PublishService,
         PublicSessionService,
         PublicSubmissionsService,
@@ -93,6 +96,7 @@ export class AppModule {
         VerifiedProbeController,
         WorkspaceBootstrapController,
         FormsController,
+        SubmissionsController,
         PublishController,
         PublicFormController,
         PublicFormSessionController,
