@@ -170,7 +170,7 @@ describe("Better Auth mounted under /v1/auth (NestJS)", () => {
   it("records what Nest sees as the peer address (ticket-04 hop diagnostics)", async () => {
     const res = await request(expressApp).get("/v1/health");
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ status: "ok", db: "ok" });
+    expect(res.body).toEqual({ status: "ok", db: true });
     // Direct (in-process) hop: the peer is loopback. Through the Next.js
     // rewrite the peer is the Next process — see the ADR curl runbook. The
     // ADR-0003 `x-spike-*` headers are replaced by the ticket-04 hop

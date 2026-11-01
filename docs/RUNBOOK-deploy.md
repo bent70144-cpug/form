@@ -156,61 +156,169 @@ anywhere in Render** — not as an env var, not in a build command.
 - Verification and password-reset mail goes through the **HTTPS provider**
   (`EMAIL_PROVIDER=resend` with `RESEND_API_KEY`); there is **no console
   adapter** — an unconfigured deployed environment fails the send loudly
-  instead of leaking tokens into logs.
-- **[REQUIRES CREDENTIALS]** The provider sandbox may deliver only to the
-  account owner's address during development. Verify: sign up with the
-  owner's address, receive the verification email, confirm no verification
-  token appears in the Render logs.
-- **Before the first outside tester** **[REQUIRES CREDENTIALS]**: own and
-  verify a sending domain with the provider (roughly $10/year — confirm
-  current pricing; add the provider's DNS records, wait for verification).
-  The `onrender.com` hostname **cannot** be verified as a sender domain —
-  without a verified domain, outside testers never receive mail.
+  instead of leaking tokens into logs. Adapter selection is env-driven
+  (`packages/auth/src/server/email/resolve.ts`): `mail_sink` is the
+  dev/test default only (`NODE_ENV !== "production"`); production defaults
+  to `resend` (`packages/auth/test/auth.test.ts` pins the matrix).
+- **[REQUIRES CREDENTIALS]** Provider setup, in order:
+  1. Create the provider account and generate an API key
+     (sender identity, server-side only — it must reach only the API child;
+     the supervisor allowlist already drops it from web/worker).
+  2. During development the provider sandbox may deliver **only to the
+     account owner's address** — sign up with the owner's address, receive
+     the verification email, and confirm no verification token appears in
+     the Render logs.
+  3. **Before the first outside tester**: own and verify a sending domain
+     with the provider (roughly $10/year — confirm current pricing; add the
+     provider's DNS records at the domain registrar, wait for verification).
+     The `onrender.com` hostname **cannot** be verified as a sender domain —
+     without a verified domain, outside testers never receive mail.
+  4. Set `EMAIL_FROM` to an address on the verified domain, e.g.
+     `Form <noreply@your-domain.com>`.
 - Also complete a password reset over the live email path once (single-use
   token, one-hour expiry, all sessions revoked on completion).
 
 ## 4. Cold-start measurement — [REQUIRES CREDENTIALS]
 
 The Render free tier spins the service down; measure, don't guess (record the
-numbers in the ticket):
+numbers in the ticket). A dedicated script times all four render paths over
+the live origin (no dependencies, works from any machine that can reach the
+alpha):
+
+```sh
+pnpm measure:cold-start https://<alpha> \
+  --slug <published-slug> \
+  --cookie "better-auth.session_token=<copy from browser devtools>" \
+  --runs 3 --json cold-start.json
+```
+
+(`--cookie` may also be passed as the `FORM_SESSION_COOKIE` env var. The
+cookie value is a live session credential — keep it out of the ticket and out
+of any committed file; only timings get recorded.)
+
+The script measures, per target, a "cold" first run and warm medians:
+
+1. `GET /v1/health` — API liveness + the live `SELECT 1` DB probe.
+2. `GET /` — unauthenticated Next SSR.
+3. `GET /f/<slug>` — the unauthenticated public SSR hop (Next server
+   component → internal API security-definer read).
+4. `GET /dashboard` — the **authenticated SSR session hop** (middleware
+   cookie check → SSR session read → internal API with the forwarded
+   cookie). Requires `--cookie`; the script skips it with a warning
+   otherwise.
+
+Manual equivalents (browser devtools network waterfall for the dashboard):
 
 1. `time curl -s -o /dev/null -w "%{http_code} %{time_total}\n" https://<alpha>/v1/health`
-   — cold vs. warm (run twice; the first includes process spin-up).
 2. `time curl -s -o /dev/null -w "%{http_code} %{time_total}\n" https://<alpha>/f/<slug>`
-   — the unauthenticated SSR page (Next → internal API hop).
-3. Sign in and load `https://<alpha>/dashboard` — the **authenticated SSR
-   session hop** (Next server component → internal API with the forwarded
-   cookie) — measure with the browser devtools network waterfall.
-4. Free-tier spin-up is expected and acceptable; do not encode it into domain
-   code.
+
+Interpretation:
+
+- Run the script twice back-to-back; run 1 of the first invocation includes
+  free-tier spin-up if the service was idle (cross-check Render Metrics →
+  instance start events).
+- The `/dashboard` hop minus `/v1/health` is the authenticated SSR session
+  cost; the `/f/<slug>` hop minus `/v1/health` is the public SSR hop cost.
+- Free-tier spin-up is expected and acceptable; do not encode it into domain
+  code.
 
 ## 5. Live smoke checklist — [REQUIRES CREDENTIALS]
 
 Run on the alpha URL after every deploy (the full acceptance list is
-[issues/12-deploy-smoke.md](../issues/12-deploy-smoke.md)):
+[issues/12-deploy-smoke.md](../issues/12-deploy-smoke.md)). Each step maps to
+the automated coverage that already proves the same behavior locally/CI, so a
+live failure localizes to deployment, not design:
 
-- [ ] `GET https://<alpha>/v1/health` → 200 `{"status":"ok","db":"ok"}` — no
-      tenant data in the body.
-- [ ] Live loop: sign up (outside tester's address once the domain is
-      verified) → verify via the REAL email → bootstrap workspace → create a
-      form → save a draft with valid blocks → publish at `/f/{slug}` → open
-      the link in a private window → submit as an unauthenticated respondent →
-      review the submission in the dashboard inbox.
-- [ ] Unpublish → the public form shows the closed message; republish → the
-      link works again with a new version number.
-- [ ] Ticket-04 auth hardening present in the deployed build: a cookie-less
-      mutation gets 403 `origin_mismatch`; hammering sign-up gets 429
-      `rate_limited` with `Retry-After`.
+| # | Live step on the alpha                                                     | Already proven by (automated)                                                                                                                                                                                                                     |
+| - | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 | `GET /v1/health` → 200 `{"status":"ok","db":true}`                          | `apps/api/test/health.test.ts` (live `SELECT 1` probe, no-leak on failure), `apps/web/test/web.test.ts` (`/v1/*` rewrite proxy), `packages/contracts` (response schema), smoke-local CI step 1                                                    |
+| 2 | Sign up with a real address → verification email arrives → link verifies    | `apps/api/test/auth-core.test.ts` + `auth-roundtrip.test.ts` (real HTTP loop over the mail sink), `packages/auth/test/auth.test.ts` (HTTPS adapter, i18n copy), smoke-local steps 2–4; **live-only risk**: provider/domain configuration (§3)     |
+| 3 | Sign in → dashboard loads with a session                                   | smoke-local step 4; `apps/web/test/auth-ui.test.ts`                                                                                                                                                                                               |
+| 4 | `POST /v1/workspaces/bootstrap` (idempotent personal workspace)             | `apps/api/test/workspaces.test.ts`, `apps/web/test/bootstrap-workspace.test.ts`; smoke-local step 5                                                                                                                                               |
+| 5 | Create a form, save a valid draft (welcome + required short_text + ending)  | `apps/api/test/forms.test.ts` + `forms-draft.test.ts` (409 `draft_conflict`, 422s); smoke-local steps 6–7                                                                                                                                          |
+| 6 | Publish → `/f/{slug}` answers unauthenticated, `Cache-Control: no-store`    | `apps/api/test/publish.test.ts` + `public.test.ts`; smoke-local steps 8–9                                                                                                                                                                         |
+| 7 | Public session → submit → receipt (missing required answer → 422)           | `apps/api/test/public-session.test.ts` + `public-submissions.test.ts`; smoke-local steps 10–11                                                                                                                                                    |
+| 8 | Review the submission in the dashboard inbox                                | ticket-11 suites + Playwright path once merged; on this branch the durable-retrieval proof is smoke-local step 12 (idempotent replay returns the SAME submission id)                                                                              |
+| 9 | Unpublish → closed message; republish → works again, new version            | `apps/api/test/publish.test.ts` (version increments, closed-form behavior)                                                                                                                                                                        |
+
+Also on every live run:
+
+- [ ] Health body is exactly `{"status":"ok","db":true}` — the 200 is process
+      liveness, `db` is a **live** `SELECT 1` probe on the pooled app_user
+      connection (`apps/api/src/health.controller.ts`). `"db":false` (still
+      200) means the database is unreachable — check the Neon pooled URL /
+      role password first. The body never carries error text (pg errors can
+      embed connection strings).
 - [ ] Supervisor allowlist on the deployed build: the Next process env has no
       `DATABASE_URL`, auth secret, or migrator URL (proven in CI by
-      `packages/config/test/supervisor.test.mjs`; on Render, spot-check via
-      the service shell `env | sort` inside the web child if needed).
+      `packages/config/test/supervisor.test.mjs` and the web-process guard
+      `apps/web/src/lib/env.ts` — it refuses startup on any forbidden key; on
+      Render, spot-check via the service shell `env | sort` inside the web
+      child if needed).
 - [ ] Logs contain no tenant data, no cookies/tokens/authorization headers,
-      and no verification tokens (the structured-logger redaction tests in
-      `packages/config` and `apps/api` prove the mechanism; on the live alpha,
-      scan the first deploy's logs once for the signed-up address, the form
-      title, and the submission answer — none should appear).
+      and no verification tokens. Mechanism: pino `redact` paths in
+      `packages/config/src/logger.ts`, pinned by
+      `packages/config/test/logger.test.ts`; the Resend adapter never echoes
+      the message body on failure (`packages/auth/test/auth.test.ts`). On the
+      live alpha, scan the first deploy's logs once for the signed-up
+      address, the form title, and the submission answer — none should appear.
 - [ ] Cold-start numbers recorded (section 4).
+- [ ] Ticket-04 auth hardening present — run the verification mapping in
+      section 6.
+
+## 6. Ticket-04 auth hardening on the deployed build — [REQUIRES CREDENTIALS]
+
+The hardening ships in the same build as everything else (CI runs the suites
+below on every branch), so "present in the deployed build" is primarily a
+spot-check that the production env (e.g. `TRUSTED_PROXY_COUNT`) is set
+correctly. Exact commands:
+
+1. **Origin guard** — a state-changing request without the browser Origin
+   must get `403` with `"code":"origin_mismatch"`:
+
+   ```sh
+   curl -si -X POST https://<alpha>/v1/auth/sign-in/email \
+     -H 'content-type: application/json' \
+     --data '{"email":"nobody@example.com","password":"not-the-password"}' \
+     | head -n 1
+   ```
+
+   → `HTTP/1.1 403 Forbidden`. Code: `apps/api/src/common/origin-guard.ts`;
+   tests: `apps/api/test/auth-core.test.ts` (evil origins 403, safe methods
+   exempt).
+
+2. **Rate limits** — hammering sign-in from one address must eventually give
+   `429` with an RFC 9457 body (`rate_limited`) and a `Retry-After` header:
+
+   ```sh
+   for i in $(seq 1 12); do
+     curl -s -o /dev/null -w "%{http_code} " -X POST https://<alpha>/v1/auth/sign-in/email \
+       -H 'content-type: application/json' -H "origin: https://<alpha>" \
+       --data '{"email":"nobody@example.com","password":"not-the-password"}'
+   done; echo
+   ```
+
+   → ten `401`s (bad credentials, origin accepted) then `429`s for requests
+   11–12. Limits (the single source of truth is
+   `apps/api/src/common/rate-limit/limits.ts`): signup 5/h/IP; sign-in
+   10/15min per IP **and** per email; reset 3/h per email + 10/h per IP;
+   `GET /v1/auth/session` 120/min/IP; public session 30/h per IP and per
+   form. Tests: `apps/api/test/auth-rate-limit.test.ts`,
+   `rate-limit.test.ts`, `public-session.test.ts`.
+
+3. **Trusted proxy handling** — on Render `TRUSTED_PROXY_COUNT=1` must be
+   set (Render env, section 2): the rightmost `X-Forwarded-For` entry is the
+   edge-attested client IP and client-supplied entries cannot change the
+   derived address the limiter keys on. Code:
+   `apps/api/src/common/trusted-ip/`; tests: `trusted-ip.test.ts` and
+   `trusted-ip-rewrite.test.ts` (drives the REAL browser → Next `/v1/*`
+   rewrite → Nest hop with both the local `0` and the Render `1`
+   configuration; spoofed headers never change the derived IP).
+
+4. **Password policy** — sign-up with a 11-char password must fail
+   validation (`422`), 12–128 accepted. Code: `packages/auth/src/password.ts`
+   (`PASSWORD_LIMITS = { min: 12, max: 128 }`); tests:
+   `packages/auth/test/auth.test.ts` + the auth round-trip suite.
 
 ## Required secrets (summary)
 

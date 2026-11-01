@@ -116,3 +116,30 @@ describe("runMigrations", () => {
     }
   });
 });
+
+describe("migration hygiene (ticket 12)", () => {
+  const MIGRATIONS_DIR = path.join(__dirname, "..", "migrations");
+
+  function migrationFiles(): string[] {
+    return fs
+      .readdirSync(MIGRATIONS_DIR)
+      .filter((f) => f.endsWith(".sql"))
+      .sort();
+  }
+
+  it("contains NO role passwords or role management — roles come only from the one-time admin bootstrap", async () => {
+    // Spec: "no role password appears in any migration file". Roles are
+    // created by packages/database/src/bootstrap.ts from environment
+    // variables; migrations only GRANT to the pre-existing roles. Any
+    // `CREATE ROLE`/`ALTER ROLE`/`PASSWORD`/connection-string token in a
+    // migration file would be a credential leak by construction.
+    const forbidden = /password|create\s+role|alter\s+role|postgres:\/\//i;
+    for (const name of migrationFiles()) {
+      const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, name), "utf8");
+      expect(sql, `${name} must not contain role/password material`).not.toMatch(
+        forbidden,
+      );
+    }
+    expect(migrationFiles().length).toBeGreaterThanOrEqual(6);
+  });
+});

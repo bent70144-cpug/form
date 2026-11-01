@@ -293,8 +293,10 @@ async function main() {
     await step("1. health (GET /v1/health through the /v1/* rewrite)", async () => {
       const response = await http("GET", "/v1/health", { baseUrl });
       expectStatus(response, 200, "health");
-      if (response.json?.status !== "ok" || response.json?.db !== "ok") {
-        fail("health body does not report {status:'ok', db:'ok'}", response.text);
+      // Contract (packages/contracts healthResponseSchema): status literal
+      // "ok" (process liveness) + live db reachability as a BOOLEAN.
+      if (response.json?.status !== "ok" || response.json?.db !== true) {
+        fail("health body does not report {status:'ok', db:true}", response.text);
       }
       return "process liveness + database reachability, no tenant data";
     });
