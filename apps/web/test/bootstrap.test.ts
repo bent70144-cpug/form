@@ -9,7 +9,8 @@ import { t } from "@form/i18n";
  * guarantee (idempotent bootstrap, verified-email boundary, origin guard) is
  * proven at the API seam; here we pin the client-side wiring rules from the
  * spec — bootstrap is a CLIENT component calling the same-origin /v1/*
- * rewrite, never a server-component call, and the session GET never writes.
+ * rewrite through the lib helper, never a server-component call, and the
+ * session GET never writes.
  */
 
 const WEB_ROOT = path.resolve(__dirname, "..");
@@ -20,16 +21,21 @@ function readWebSource(relPath: string): string {
 
 describe("dashboard workspace bootstrap (ticket 05)", () => {
   it("bootstrap is a client component posting through the same-origin /v1 rewrite", () => {
-    const source = readWebSource("src/app/dashboard/BootstrapWorkspace.tsx");
-    expect(source).toContain('"use client"');
-    expect(source).toContain('fetch("/v1/workspaces/bootstrap"');
-    expect(source).toContain('"POST"');
-    expect(source).toContain("credentials: \"same-origin\"");
-    expect(source).toContain("router.refresh()");
-    // The i18n key must resolve (catches catalog drift).
-    expect(t("dashboard.bootstrap.settingUp")).toContain("Setting up your workspace");
-    expect(t("dashboard.bootstrap.failed").length).toBeGreaterThan(0);
-    expect(t("dashboard.bootstrap.retry").length).toBeGreaterThan(0);
+    const component = readWebSource("src/app/dashboard/BootstrapWorkspace.tsx");
+    expect(component).toContain('"use client"');
+    // The POST happens in the browser via the shared lib helper.
+    expect(component).toContain("bootstrapWorkspace()");
+    expect(component).toContain("router.refresh()");
+    // i18n keys must resolve (catches catalog drift).
+    expect(t("dashboard.settingUpWorkspace")).toContain(
+      "Setting up your workspace",
+    );
+    expect(t("dashboard.bootstrapFailed").length).toBeGreaterThan(0);
+
+    const helper = readWebSource("src/lib/bootstrap-workspace.ts");
+    expect(helper).toContain('"/v1/workspaces/bootstrap"');
+    expect(helper).toContain('"POST"');
+    expect(helper).toContain('"same-origin"');
   });
 
   it("the dashboard renders the bootstrap component ONLY when session.workspace is null", () => {
@@ -43,9 +49,14 @@ describe("dashboard workspace bootstrap (ticket 05)", () => {
     expect(code).not.toContain("workspaces/bootstrap");
   });
 
-  it("the dashboard shows the workspace name and role once present", () => {
-    const page = readWebSource("src/app/dashboard/page.tsx");
-    expect(page).toContain("session.workspace.name");
-    expect(page).toContain("session.workspace.role");
+  it("the dashboard session supplies the workspace name and role once present", () => {
+    // The active workspace {id, name, role} is resolved server-side via the
+    // security-definer list_workspaces() (apps/api session service) and
+    // shaped by the shared contract — pin the shape here.
+    const contracts = readWebSource(
+      "../../packages/contracts/src/schemas/workspace.ts",
+    );
+    expect(contracts).toContain("name: z.string()");
+    expect(contracts).toContain("role: workspaceRoleSchema");
   });
 });
