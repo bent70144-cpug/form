@@ -59,6 +59,7 @@ export async function createApiApp(
   trustedIpConfig: TrustedIpConfig;
   /** The guarded pooled app_user connection for tenant work (ticket 05). */
   dbPool: Pool;
+  close: () => Promise<void>;
 }> {
   const trustedIpConfig: TrustedIpConfig = trustedIpConfigFromValues(env);
   const rateLimiter = new RateLimiter();
@@ -96,5 +97,11 @@ export async function createApiApp(
   expressApp.use(mountBetterAuth(auth));
 
   await nestApp.init();
-  return { nestApp, expressApp, auth, rateLimiter, trustedIpConfig, dbPool };
+  // Graceful shutdown: stop accepting connections, close the DB pool so the
+  // worker/supervisor can drain cleanly (SIGTERM/SIGINT in main.ts).
+  const close = async (): Promise<void> => {
+    await nestApp.close();
+    await dbPool.end();
+  };
+  return { nestApp, expressApp, auth, rateLimiter, trustedIpConfig, dbPool, close };
 }

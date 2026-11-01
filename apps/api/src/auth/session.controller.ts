@@ -34,7 +34,7 @@ export class SessionController {
     // {id, name, role} once it exists (resolved via list_workspaces() in a
     // narrow read-only transaction). It still never writes: before the
     // dashboard's client bootstrap component runs, `workspace` is null.
-    const session = await this.sessions.getSessionWithWorkspace(
+    const session = await this.sessions.getMinimalSession(
       typeof cookie === "string" ? cookie : undefined,
     );
     if (!session) {

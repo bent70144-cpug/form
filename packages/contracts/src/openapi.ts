@@ -2,7 +2,6 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 import { healthResponseSchema } from "./schemas/health";
 import { problemDetailsSchema } from "./schemas/errors";
 import {
-  bootstrapRequestSchema,
   bootstrapResponseSchema,
   sessionResponseSchema,
   workspaceSchema,
