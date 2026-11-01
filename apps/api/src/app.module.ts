@@ -14,6 +14,9 @@ import { WorkspaceBootstrapController } from "./workspaces/bootstrap.controller"
 import { TenantRequestContextInterceptor } from "./workspaces/tenant-context.interceptor";
 import { FormsService } from "./forms/forms.service";
 import { FormsController } from "./forms/forms.controller";
+import { PublishService } from "./forms/publish.service";
+import { PublishController } from "./forms/publish.controller";
+import { PublicFormController } from "./public/public.controller";
 
 /**
  * Root NestJS module. Auth-dependent providers arrive through the
@@ -34,6 +37,14 @@ import { FormsController } from "./forms/forms.controller";
  * Ticket 06 adds the first FULL-context domain routes: `FormsController`
  * (create/list/read/rename) with `FormsService` — every route carries
  * `@RequireWorkspaceContext()` and receives the interceptor's `TenantDb`.
+ *
+ * Ticket 09 adds the publish slice: `PublishController` (POST publish /
+ * unpublish — same FULL workspace context as FormsController) with
+ * `PublishService` (one transaction: row lock, full publish validation,
+ * immutable version, slug registration, audit + outbox), and the
+ * UNauthenticated `PublicFormController` (GET /v1/public/forms/{slug} wrapping
+ * the security-definer `get_published_form()` on the raw pool — no guards, no
+ * tenant transaction, `Cache-Control: no-store` on every response).
  */
 @Module({})
 export class AppModule {
@@ -49,6 +60,7 @@ export class AppModule {
         WorkspaceService,
         TenantRequestContextInterceptor,
         FormsService,
+        PublishService,
       ],
       controllers: [
         HealthController,
@@ -56,6 +68,8 @@ export class AppModule {
         VerifiedProbeController,
         WorkspaceBootstrapController,
         FormsController,
+        PublishController,
+        PublicFormController,
       ],
     };
   }
