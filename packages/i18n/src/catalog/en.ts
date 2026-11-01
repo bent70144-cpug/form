@@ -141,6 +141,30 @@ export const en = {
       worstCaseWarning:
         "Warning: worst-case answers ({worst} KB) exceed the {cap} KB submission cap — oversized submissions will be rejected.",
     },
+    /**
+     * Submission inbox (ticket 11): the per-form list page
+     * (/dashboard/forms/{id}/inbox) and the detail view. Every label, empty
+     * state, date prefix and error is looked up here — no hardcoded copy.
+     * Answers pair with question labels from the PINNED version's schema and
+     * render as escaped plain text.
+     */
+    inbox: {
+      link: "Inbox",
+      title: "Inbox",
+      backToForm: "Back to form",
+      empty: "No submissions yet.",
+      loadFailed: "Submissions could not be loaded. Please try again.",
+      notFound: "Submission not found.",
+      submittedAt: "Received {date}",
+      formVersion: "Form version {version}",
+      submissionIdLabel: "Submission",
+      answersHeading: "Answers",
+      previewEmpty: "No text answers",
+      questionFallback: "Question",
+      noAnswer: "(no answer)",
+      nextPage: "Next page",
+      unknownAnswer: "This answer has no matching question in the pinned version.",
+    },
   },
   auth: {
     signIn: {

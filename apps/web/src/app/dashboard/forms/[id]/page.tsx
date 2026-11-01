@@ -61,6 +61,12 @@ export default async function FormPage(props: {
 
       <h1>{form.name}</h1>
       <p>
+        {/* Ticket 11 — the per-form inbox (submission list + detail). */}
+        <Link href={`/dashboard/forms/${form.id}/inbox`}>
+          {t("dashboard.inbox.link")}
+        </Link>
+      </p>
+      <p>
         <RenameForm formId={form.id} currentName={form.name} />
       </p>
       <p>

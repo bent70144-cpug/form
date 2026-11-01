@@ -605,6 +605,55 @@ exports[`openapi document > matches the committed snapshot 1`] = `
         ],
         "type": "object",
       },
+      "ListSubmissionsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "nextCursor": {
+            "nullable": true,
+            "type": "string",
+          },
+          "submissions": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "formVersionId": {
+                  "format": "uuid",
+                  "type": "string",
+                },
+                "formVersionNumber": {
+                  "minimum": 1,
+                  "type": "integer",
+                },
+                "id": {
+                  "format": "uuid",
+                  "type": "string",
+                },
+                "preview": {
+                  "nullable": true,
+                  "type": "string",
+                },
+                "submittedAt": {
+                  "type": "string",
+                },
+              },
+              "required": [
+                "id",
+                "submittedAt",
+                "formVersionId",
+                "formVersionNumber",
+                "preview",
+              ],
+              "type": "object",
+            },
+            "type": "array",
+          },
+        },
+        "required": [
+          "submissions",
+          "nextCursor",
+        ],
+        "type": "object",
+      },
       "ProblemDetails": {
         "additionalProperties": false,
         "properties": {
@@ -1193,6 +1242,233 @@ exports[`openapi document > matches the committed snapshot 1`] = `
           "expiresAt",
           "pinnedVersionId",
           "schema",
+        ],
+        "type": "object",
+      },
+      "SubmissionDetail": {
+        "additionalProperties": false,
+        "properties": {
+          "pinnedSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "blocks": {
+                "items": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "description": {
+                          "type": "string",
+                        },
+                        "id": {
+                          "type": "string",
+                        },
+                        "kind": {
+                          "enum": [
+                            "welcome",
+                          ],
+                          "type": "string",
+                        },
+                        "title": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "id",
+                        "kind",
+                        "title",
+                      ],
+                      "type": "object",
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "description": {
+                          "type": "string",
+                        },
+                        "id": {
+                          "$ref": "#/properties/pinnedSchema/properties/blocks/items/anyOf/0/properties/id",
+                        },
+                        "kind": {
+                          "enum": [
+                            "short_text",
+                          ],
+                          "type": "string",
+                        },
+                        "label": {
+                          "type": "string",
+                        },
+                        "placeholder": {
+                          "type": "string",
+                        },
+                        "required": {
+                          "type": "boolean",
+                        },
+                      },
+                      "required": [
+                        "id",
+                        "kind",
+                        "label",
+                        "required",
+                      ],
+                      "type": "object",
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "description": {
+                          "type": "string",
+                        },
+                        "id": {
+                          "$ref": "#/properties/pinnedSchema/properties/blocks/items/anyOf/0/properties/id",
+                        },
+                        "kind": {
+                          "enum": [
+                            "long_text",
+                          ],
+                          "type": "string",
+                        },
+                        "label": {
+                          "type": "string",
+                        },
+                        "placeholder": {
+                          "type": "string",
+                        },
+                        "required": {
+                          "type": "boolean",
+                        },
+                      },
+                      "required": [
+                        "id",
+                        "kind",
+                        "label",
+                        "required",
+                      ],
+                      "type": "object",
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "description": {
+                          "type": "string",
+                        },
+                        "id": {
+                          "$ref": "#/properties/pinnedSchema/properties/blocks/items/anyOf/0/properties/id",
+                        },
+                        "kind": {
+                          "enum": [
+                            "ending",
+                          ],
+                          "type": "string",
+                        },
+                        "title": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "id",
+                        "kind",
+                        "title",
+                      ],
+                      "type": "object",
+                    },
+                  ],
+                },
+                "type": "array",
+              },
+              "logic": {
+                "items": {
+                  "additionalProperties": {},
+                  "type": "object",
+                },
+                "type": "array",
+              },
+              "schemaVersion": {
+                "enum": [
+                  1,
+                ],
+                "type": "number",
+              },
+              "settings": {
+                "additionalProperties": {},
+                "type": "object",
+              },
+              "theme": {
+                "additionalProperties": false,
+                "properties": {
+                  "preset": {
+                    "enum": [
+                      "default",
+                    ],
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "preset",
+                ],
+                "type": "object",
+              },
+              "title": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "schemaVersion",
+              "title",
+              "blocks",
+              "logic",
+              "theme",
+              "settings",
+            ],
+            "type": "object",
+          },
+          "submission": {
+            "additionalProperties": false,
+            "properties": {
+              "answers": {
+                "additionalProperties": {
+                  "type": "string",
+                },
+                "type": "object",
+              },
+              "formVersion": {
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "format": "uuid",
+                    "type": "string",
+                  },
+                  "versionNumber": {
+                    "minimum": 1,
+                    "type": "integer",
+                  },
+                },
+                "required": [
+                  "id",
+                  "versionNumber",
+                ],
+                "type": "object",
+              },
+              "id": {
+                "format": "uuid",
+                "type": "string",
+              },
+              "submittedAt": {
+                "type": "string",
+              },
+            },
+            "required": [
+              "id",
+              "submittedAt",
+              "formVersion",
+              "answers",
+            ],
+            "type": "object",
+          },
+        },
+        "required": [
+          "submission",
+          "pinnedSchema",
         ],
         "type": "object",
       },
@@ -2666,6 +2942,391 @@ exports[`openapi document > matches the committed snapshot 1`] = `
           },
         },
         "summary": "Publish (or republish) the form as a new immutable version",
+        "tags": [
+          "forms",
+        ],
+      },
+    },
+    "/v1/forms/{formId}/submissions": {
+      "get": {
+        "description": "Authenticated workspace route (FULL tenant context; RLS is the boundary — an unknown or cross-workspace form is 404, never 403). Cursor pagination: \`limit\` defaults to 20 and is capped at 100; \`nextCursor\` is null on the last page. Ordered newest first by \`(created_at, id)\` (spec API conventions).",
+        "operationId": "listSubmissions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "formId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer",
+            },
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "nextCursor": {
+                      "nullable": true,
+                      "type": "string",
+                    },
+                    "submissions": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "formVersionId": {
+                            "format": "uuid",
+                            "type": "string",
+                          },
+                          "formVersionNumber": {
+                            "minimum": 1,
+                            "type": "integer",
+                          },
+                          "id": {
+                            "format": "uuid",
+                            "type": "string",
+                          },
+                          "preview": {
+                            "nullable": true,
+                            "type": "string",
+                          },
+                          "submittedAt": {
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "id",
+                          "submittedAt",
+                          "formVersionId",
+                          "formVersionNumber",
+                          "preview",
+                        ],
+                        "type": "object",
+                      },
+                      "type": "array",
+                    },
+                  },
+                  "required": [
+                    "submissions",
+                    "nextCursor",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "One page of submission summaries",
+          },
+          "401": {
+            "description": "Absent, invalid, expired, or revoked session",
+          },
+          "403": {
+            "description": "Email not verified or no workspace yet (\`forbidden\`)",
+          },
+          "404": {
+            "description": "Unknown form or a form of another workspace (\`not_found\`)",
+          },
+          "422": {
+            "description": "Invalid pagination parameters (\`validation_failed\`)",
+          },
+        },
+        "summary": "List a form's submissions, newest first",
+        "tags": [
+          "forms",
+        ],
+      },
+    },
+    "/v1/forms/{formId}/submissions/{submissionId}": {
+      "get": {
+        "description": "Authenticated workspace route. Returns the stored answers plus the PINNED form version's schema envelope so the inbox pairs each answer with the question label the respondent actually saw — never the current draft. Unknown or cross-workspace submissions answer 404.",
+        "operationId": "getSubmission",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "formId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string",
+            },
+          },
+          {
+            "in": "path",
+            "name": "submissionId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "pinnedSchema": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "blocks": {
+                          "items": {
+                            "anyOf": [
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "description": {
+                                    "type": "string",
+                                  },
+                                  "id": {
+                                    "type": "string",
+                                  },
+                                  "kind": {
+                                    "enum": [
+                                      "welcome",
+                                    ],
+                                    "type": "string",
+                                  },
+                                  "title": {
+                                    "type": "string",
+                                  },
+                                },
+                                "required": [
+                                  "id",
+                                  "kind",
+                                  "title",
+                                ],
+                                "type": "object",
+                              },
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "description": {
+                                    "type": "string",
+                                  },
+                                  "id": {
+                                    "$ref": "#/properties/pinnedSchema/properties/blocks/items/anyOf/0/properties/id",
+                                  },
+                                  "kind": {
+                                    "enum": [
+                                      "short_text",
+                                    ],
+                                    "type": "string",
+                                  },
+                                  "label": {
+                                    "type": "string",
+                                  },
+                                  "placeholder": {
+                                    "type": "string",
+                                  },
+                                  "required": {
+                                    "type": "boolean",
+                                  },
+                                },
+                                "required": [
+                                  "id",
+                                  "kind",
+                                  "label",
+                                  "required",
+                                ],
+                                "type": "object",
+                              },
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "description": {
+                                    "type": "string",
+                                  },
+                                  "id": {
+                                    "$ref": "#/properties/pinnedSchema/properties/blocks/items/anyOf/0/properties/id",
+                                  },
+                                  "kind": {
+                                    "enum": [
+                                      "long_text",
+                                    ],
+                                    "type": "string",
+                                  },
+                                  "label": {
+                                    "type": "string",
+                                  },
+                                  "placeholder": {
+                                    "type": "string",
+                                  },
+                                  "required": {
+                                    "type": "boolean",
+                                  },
+                                },
+                                "required": [
+                                  "id",
+                                  "kind",
+                                  "label",
+                                  "required",
+                                ],
+                                "type": "object",
+                              },
+                              {
+                                "additionalProperties": false,
+                                "properties": {
+                                  "description": {
+                                    "type": "string",
+                                  },
+                                  "id": {
+                                    "$ref": "#/properties/pinnedSchema/properties/blocks/items/anyOf/0/properties/id",
+                                  },
+                                  "kind": {
+                                    "enum": [
+                                      "ending",
+                                    ],
+                                    "type": "string",
+                                  },
+                                  "title": {
+                                    "type": "string",
+                                  },
+                                },
+                                "required": [
+                                  "id",
+                                  "kind",
+                                  "title",
+                                ],
+                                "type": "object",
+                              },
+                            ],
+                          },
+                          "type": "array",
+                        },
+                        "logic": {
+                          "items": {
+                            "additionalProperties": {},
+                            "type": "object",
+                          },
+                          "type": "array",
+                        },
+                        "schemaVersion": {
+                          "enum": [
+                            1,
+                          ],
+                          "type": "number",
+                        },
+                        "settings": {
+                          "additionalProperties": {},
+                          "type": "object",
+                        },
+                        "theme": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "preset": {
+                              "enum": [
+                                "default",
+                              ],
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "preset",
+                          ],
+                          "type": "object",
+                        },
+                        "title": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "schemaVersion",
+                        "title",
+                        "blocks",
+                        "logic",
+                        "theme",
+                        "settings",
+                      ],
+                      "type": "object",
+                    },
+                    "submission": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "answers": {
+                          "additionalProperties": {
+                            "type": "string",
+                          },
+                          "type": "object",
+                        },
+                        "formVersion": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "format": "uuid",
+                              "type": "string",
+                            },
+                            "versionNumber": {
+                              "minimum": 1,
+                              "type": "integer",
+                            },
+                          },
+                          "required": [
+                            "id",
+                            "versionNumber",
+                          ],
+                          "type": "object",
+                        },
+                        "id": {
+                          "format": "uuid",
+                          "type": "string",
+                        },
+                        "submittedAt": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "id",
+                        "submittedAt",
+                        "formVersion",
+                        "answers",
+                      ],
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "submission",
+                    "pinnedSchema",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "The submission detail with its pinned schema",
+          },
+          "401": {
+            "description": "Absent, invalid, expired, or revoked session",
+          },
+          "403": {
+            "description": "Email not verified or no workspace yet (\`forbidden\`)",
+          },
+          "404": {
+            "description": "Unknown submission or a submission of another workspace (\`not_found\`)",
+          },
+        },
+        "summary": "Read one submission with its pinned version's schema",
         "tags": [
           "forms",
         ],

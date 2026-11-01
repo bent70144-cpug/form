@@ -17,6 +17,8 @@ import { FormsService } from "./forms/forms.service";
 import { FormsController } from "./forms/forms.controller";
 import { PublishService } from "./forms/publish.service";
 import { PublishController } from "./forms/publish.controller";
+import { SubmissionsService } from "./forms/submissions.service";
+import { SubmissionsController } from "./forms/submissions.controller";
 import { PublicFormController } from "./public/public.controller";
 import { PublicSessionService } from "./public/public-session.service";
 import { PublicSubmissionsService } from "./public/public-submissions.service";
@@ -52,6 +54,11 @@ import {
  * UNauthenticated `PublicFormController` (GET /v1/public/forms/{slug} wrapping
  * the security-definer `get_published_form()` on the raw pool — no guards, no
  * tenant transaction, `Cache-Control: no-store` on every response).
+ *
+ * Ticket 11 adds the inbox read routes: `SubmissionsController`
+ * (GET /v1/forms/{formId}/submissions[/id] — same FULL workspace context as
+ * FormsController) with `SubmissionsService` (newest-first cursor pagination;
+ * detail returns the answers + the PINNED version's schema).
  */
 @Module({})
 export class AppModule {
@@ -81,6 +88,7 @@ export class AppModule {
         TenantRequestContextInterceptor,
         FormsService,
         PublishService,
+        SubmissionsService,
         PublicSessionService,
         PublicSubmissionsService,
         { provide: "PUBLIC_TRUSTED_IP_CONFIG", useValue: publicConfig.trustedIpConfig },
@@ -94,6 +102,7 @@ export class AppModule {
         WorkspaceBootstrapController,
         FormsController,
         PublishController,
+        SubmissionsController,
         PublicFormController,
         PublicFormSessionController,
         PublicSubmissionController,

@@ -39,5 +39,11 @@
     "typescript": "^5.7.2",
     "unplugin-swc": "^2.0.0",
     "vitest": "^2.1.8"
+  },
+  "exports": {
+    "./public/purge": {
+      "types": "./dist/public/purge.d.ts",
+      "default": "./dist/public/purge.js"
+    }
   }
 }

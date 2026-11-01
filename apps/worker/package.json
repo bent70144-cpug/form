@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@form/api": "workspace:*",
     "@form/database": "workspace:*",
     "@form/queue": "workspace:*",
     "pg-boss": "12.38.0",

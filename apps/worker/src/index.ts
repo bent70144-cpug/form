@@ -17,6 +17,9 @@ import {
   FORM_CREATED_EVENT,
   createFormCreatedHandler,
 } from "./handlers/form-created";
+// Ticket 11's one-line wiring: the daily session-purge job calls the
+// dependency-free exported call from the API slice (see its docblock).
+import { purgeExpiredSessionsOnce } from "@form/api/public/purge";
 
 export { installPgBossSchema };
 
@@ -62,6 +65,9 @@ export const DEFAULT_HEARTBEAT_INTERVAL_MS = 30_000;
 export const DEFAULT_DISPATCH_INTERVAL_MS = 30_000;
 export const HEARTBEAT_JOB = "heartbeat";
 export const OUTBOX_DISPATCH_JOB = "outbox.dispatch";
+/** Daily `purge_expired_sessions()` schedule (ticket 10/11 — see purge.ts docblock). */
+export const PURGE_EXPIRED_SESSIONS_JOB = "purge-expired-sessions";
+export const PURGE_EXPIRED_SESSIONS_CRON = "0 3 * * *";
 
 /**
  * Recurring schedule expression for a cadence in milliseconds. pg-boss 12
@@ -135,6 +141,13 @@ export async function startWorker(options: WorkerOptions): Promise<StartedWorker
     await dispatcher.dispatchOnce();
   });
 
+  // Ticket 10's security-definer purge, scheduled daily through the queue
+  // port (apps/api/src/public/purge.ts docblock; the function is granted
+  // only to worker_user — this URL).
+  queue.registerHandler(PURGE_EXPIRED_SESSIONS_JOB, async () => {
+    await purgeExpiredSessionsOnce({ databaseUrl: options.databaseUrl, logger });
+  });
+
   await queue.start();
 
   await queue.schedule(
@@ -144,6 +157,9 @@ export async function startWorker(options: WorkerOptions): Promise<StartedWorker
   );
   await queue.schedule(OUTBOX_DISPATCH_JOB, {
     cron: heartbeatCron(dispatchIntervalMs),
+  });
+  await queue.schedule(PURGE_EXPIRED_SESSIONS_JOB, {
+    cron: PURGE_EXPIRED_SESSIONS_CRON,
   });
 
   process.stdout.write(

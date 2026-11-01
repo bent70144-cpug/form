@@ -1,0 +1,16 @@
+{
+  "name": "@form/e2e",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e-headed": "playwright test --headed",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.2",
+    "@playwright/test": "^1.51.1",
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}

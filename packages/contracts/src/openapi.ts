@@ -27,6 +27,10 @@ import {
   submitReceiptSchema,
   submitRequestSchema,
 } from "./schemas/public-session";
+import {
+  listSubmissionsResponseSchema,
+  submissionDetailSchema,
+} from "./schemas/submission";
 
 /**
  * OpenAPI 3.1 document generated from the shared Zod contracts (spec: "a
@@ -751,6 +755,112 @@ export function buildOpenApiDocument(): Record<string, unknown> {
           },
         },
       },
+      "/v1/forms/{formId}/submissions": {
+        get: {
+          operationId: "listSubmissions",
+          tags: ["forms"],
+          summary: "List a form's submissions, newest first",
+          description:
+            "Authenticated workspace route (FULL tenant context; RLS is the boundary — an unknown or cross-workspace form is 404, never 403). Cursor pagination: `limit` defaults to 20 and is capped at 100; `nextCursor` is null on the last page. Ordered newest first by `(created_at, id)` (spec API conventions).",
+          parameters: [
+            {
+              name: "formId",
+              in: "path",
+              required: true,
+              schema: { type: "string", format: "uuid" },
+            },
+            {
+              name: "limit",
+              in: "query",
+              required: false,
+              schema: {
+                type: "integer",
+                minimum: 1,
+                maximum: 100,
+                default: 20,
+              },
+            },
+            {
+              name: "cursor",
+              in: "query",
+              required: false,
+              schema: { type: "string" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "One page of submission summaries",
+              content: {
+                "application/json": {
+                  schema: zodToJsonSchema(listSubmissionsResponseSchema, {
+                    target: "openApi3",
+                  }),
+                },
+              },
+            },
+            "401": {
+              description: "Absent, invalid, expired, or revoked session",
+            },
+            "403": {
+              description:
+                "Email not verified or no workspace yet (`forbidden`)",
+            },
+            "404": {
+              description:
+                "Unknown form or a form of another workspace (`not_found`)",
+            },
+            "422": {
+              description: "Invalid pagination parameters (`validation_failed`)",
+            },
+          },
+        },
+      },
+      "/v1/forms/{formId}/submissions/{submissionId}": {
+        get: {
+          operationId: "getSubmission",
+          tags: ["forms"],
+          summary: "Read one submission with its pinned version's schema",
+          description:
+            "Authenticated workspace route. Returns the stored answers plus the PINNED form version's schema envelope so the inbox pairs each answer with the question label the respondent actually saw — never the current draft. Unknown or cross-workspace submissions answer 404.",
+          parameters: [
+            {
+              name: "formId",
+              in: "path",
+              required: true,
+              schema: { type: "string", format: "uuid" },
+            },
+            {
+              name: "submissionId",
+              in: "path",
+              required: true,
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "The submission detail with its pinned schema",
+              content: {
+                "application/json": {
+                  schema: zodToJsonSchema(submissionDetailSchema, {
+                    target: "openApi3",
+                  }),
+                },
+              },
+            },
+            "401": {
+              description: "Absent, invalid, expired, or revoked session",
+            },
+            "403": {
+              description:
+                "Email not verified or no workspace yet (`forbidden`)",
+            },
+            "404": {
+              description:
+                "Unknown submission or a submission of another workspace (`not_found`)",
+            },
+          },
+        },
+      },
     },
     components: {
       schemas: {
@@ -797,6 +907,12 @@ export function buildOpenApiDocument(): Record<string, unknown> {
           target: "openApi3",
         }),
         SubmitReceipt: zodToJsonSchema(submitReceiptSchema, {
+          target: "openApi3",
+        }),
+        ListSubmissionsResponse: zodToJsonSchema(listSubmissionsResponseSchema, {
+          target: "openApi3",
+        }),
+        SubmissionDetail: zodToJsonSchema(submissionDetailSchema, {
           target: "openApi3",
         }),
       },
