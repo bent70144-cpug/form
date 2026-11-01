@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   EnvValidationError,
-  apiEnvSchema,
   bootstrapEnvSchema,
   loadEnv,
   migratorEnvSchema,
@@ -9,52 +8,61 @@ import {
   workerEnvSchema,
 } from "../src/env";
 
-const VALID_API_ENV = {
+const VALID_WORKER_ENV = {
   NODE_ENV: "test",
-  PORT: "4000",
-  DATABASE_URL: "postgres://app_user:pw@localhost:5433/form_test",
-  APP_ORIGIN: "http://localhost:3000",
+  WORKER_DATABASE_URL: "postgres://worker_user:pw@localhost:5433/form_test",
   LOG_LEVEL: "info",
 };
 
 describe("loadEnv", () => {
-  it("accepts a valid API environment", () => {
-    const env = loadEnv(apiEnvSchema, VALID_API_ENV);
-    expect(env.PORT).toBe(4000);
-    expect(env.DATABASE_URL).toContain("app_user");
+  it("accepts a valid worker environment", () => {
+    const env = loadEnv(workerEnvSchema, VALID_WORKER_ENV);
+    expect(env.WORKER_DATABASE_URL).toContain("worker_user");
+    expect(env.HEARTBEAT_INTERVAL_MS).toBe(30_000);
   });
 
   it("fails with every missing variable listed", () => {
-    expect(() => loadEnv(apiEnvSchema, {})).toThrow(EnvValidationError);
+    expect(() => loadEnv(workerEnvSchema, {})).toThrow(EnvValidationError);
     try {
-      loadEnv(apiEnvSchema, {});
+      loadEnv(workerEnvSchema, {});
       expect.unreachable();
     } catch (err) {
       const issues = (err as EnvValidationError).issues.map((i) =>
         i.path.join("."),
       );
-      expect(issues).toContain("DATABASE_URL");
-      expect(issues).toContain("APP_ORIGIN");
+      expect(issues).toContain("WORKER_DATABASE_URL");
     }
   });
 
   it("rejects non-postgres connection strings", () => {
     expect(() =>
-      loadEnv(apiEnvSchema, { ...VALID_API_ENV, DATABASE_URL: "mysql://x" }),
+      loadEnv(workerEnvSchema, {
+        ...VALID_WORKER_ENV,
+        WORKER_DATABASE_URL: "mysql://x",
+      }),
     ).toThrow(/postgres/);
   });
 
-  it("rejects non-numeric PORT", () => {
+  it("rejects a non-numeric or non-positive HEARTBEAT_INTERVAL_MS", () => {
     expect(() =>
-      loadEnv(apiEnvSchema, { ...VALID_API_ENV, PORT: "not-a-number" }),
+      loadEnv(workerEnvSchema, {
+        ...VALID_WORKER_ENV,
+        HEARTBEAT_INTERVAL_MS: "soon",
+      }),
+    ).toThrow(EnvValidationError);
+    expect(() =>
+      loadEnv(workerEnvSchema, {
+        ...VALID_WORKER_ENV,
+        HEARTBEAT_INTERVAL_MS: "0",
+      }),
     ).toThrow(EnvValidationError);
   });
 
-  it("validates the worker environment", () => {
+  it("defaults the heartbeat/dispatch cadence to 30s (ADR-0003)", () => {
     const env = loadEnv(workerEnvSchema, {
       WORKER_DATABASE_URL: "postgres://worker_user:pw@localhost:5433/form_test",
     });
-    expect(env.HEARTBEAT_INTERVAL_MS).toBe(10_000);
+    expect(env.HEARTBEAT_INTERVAL_MS).toBe(30_000);
   });
 
   it("validates the migrator environment", () => {

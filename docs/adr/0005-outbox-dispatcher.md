@@ -116,8 +116,11 @@ proving redelivery applies the handler effect exactly once.
 ### Scheduling
 
 `outbox.dispatch` is a recurring pg-boss schedule every 30s
-(`heartbeatCron(30_000)` → `*/30 * * * * *`, the ticket-02 interval strategy —
-bounded dispatch latency without keeping Neon awake). The
+(`heartbeatCron(HEARTBEAT_INTERVAL_MS)` → `*/30 * * * * *`, the ticket-02
+interval strategy — bounded dispatch latency without keeping Neon awake).
+`HEARTBEAT_INTERVAL_MS` (Zod-validated in `packages/config/src/env.ts`,
+default 30s) is the single source of truth for BOTH the heartbeat and the
+dispatch cadence; the worker entrypoint wires it to both schedules. The
 `outbox.dispatch` and `heartbeat` queues use the `singleton` policy so a slow
 tick never stacks with the next one; the cron monitor stays at 5s so a
 freshly-started worker's first tick lands within ~interval + 10s.

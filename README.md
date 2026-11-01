@@ -18,7 +18,7 @@ packages:
 | ---------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `apps/web`             | `@form/web`         | Next.js App Router. Dashboard and public form pages on the public origin; proxies same-origin `/v1/*` to the API. No database access.                |
 | `apps/api`             | `@form/api`         | NestJS REST API under `/v1`. Owns all request-path database access and mounts Better Auth at `/v1/auth/*`.                                           |
-| `apps/worker`          | `@form/worker`      | Queue consumer: pg-boss heartbeat, outbox dispatch, expired-session purge.                                                                           |
+| `apps/worker`          | `@form/worker`      | Queue consumer: pg-boss heartbeat, outbox dispatch. Expired-session purge lands with ticket 10.                                                      |
 | `packages/contracts`   | `@form/contracts`   | Zod request/response schemas, stable error codes, OpenAPI generation (served at `/v1/openapi.json`).                                                 |
 | `packages/database`    | `@form/database`    | Drizzle schema, SQL migrations, RLS/bootstrap SQL, UUIDv7, pool and tenant-transaction wrapper. The only request-path package that touches Postgres. |
 | `packages/form-schema` | `@form/form-schema` | Block union, schema validation, `schemaVersion` migrations. No Node or DOM dependencies.                                                             |

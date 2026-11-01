@@ -28,6 +28,10 @@ export type TenantRequest = Request & {
 };
 
 /**
+ * PROBE-ONLY tenant interceptor: used solely by workspace-probe.controller.ts
+ * (test seam); production routes use `tenant-context.interceptor.ts`'s
+ * `TenantRequestContextInterceptor` (registered globally in app.module.ts).
+ *
  * Global interceptor for classified tenant routes (see route-context.ts for
  * the full/narrow/unclassified contract).
  *

@@ -35,9 +35,10 @@ export const ORIGIN_EXEMPT_PATHS: readonly string[] = [
   // Future public endpoints (ticket 05+, not built yet) — declared here so
   // the allowlist is reviewed in one place. They must stay cookie-less.
   "/v1/public/submissions",
-  "/v1/public/sessions",
   // Ticket 09: the public render path is variable-segment shaped, so it is
   // matched by PUBLIC_FORM_READ_RE below rather than listed verbatim.
+  // Public session creation is variable-segment shaped too:
+  // /v1/public/forms/{slug}/sessions → PUBLIC_FORM_SESSION_RE below.
 ];
 
 /** Public form session creation: POST /v1/public/forms/{slug}/sessions (T05+). */

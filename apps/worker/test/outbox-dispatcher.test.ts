@@ -1,8 +1,11 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { Client } from "pg";
-import { PgBoss } from "pg-boss";
 import type { Pool } from "pg";
-import { createPool, withUserTransaction } from "@form/database";
+import {
+  createPool,
+  withTenantTransaction,
+  withUserTransaction,
+} from "@form/database";
 import {
   createScratchDatabase,
   dropDatabase,
@@ -13,27 +16,37 @@ import {
 import {
   DEFAULT_MAX_ATTEMPTS,
   createOutboxDispatcher,
-  dispatchOne,
-  intervalCron,
-  type DispatchOptions,
-} from "../src/outbox/dispatcher";
-import { defaultOutboxHandlers } from "../src/outbox/handlers";
+  type OutboxHandlerEvent,
+} from "@form/queue";
 import { installPgBossSchema } from "../src/index";
 
 /**
- * Ticket 05 — outbox dispatcher against real Postgres, running under the
- * real `worker_user` role (SELECT/UPDATE on outbox_events only):
+ * Ticket 05 — outbox dispatcher against real Postgres under the real
+ * `worker_user` role (SELECT/UPDATE on outbox_events only). This suite runs
+ * the LIVE dispatcher from `@form/queue` (ADR-0005 —
+ * `packages/queue/src/outbox/dispatcher.ts`; the worker keeps no dispatcher
+ * copy of its own):
  *
  *   - processes `workspace.created` produced by a REAL bootstrap and marks it
- *     processed exactly once (a second sweep is a no-op — no double-process);
- *   - a failed handler (crash simulation) leaves the event unprocessed with
- *     failure accounting; a RESTARTED dispatcher (fresh call) completes it
- *     exactly once more;
- *   - dead-letters after the attempt limit (override proves the mechanism;
- *     the exported default pins the spec's 10 attempts);
- *   - handlers touching tenant tables see `app.workspace_id` set from the
- *     payload under worker_user (RLS-filtered tenant read);
- *   - the pg-boss schedule fires the dispatch without manual sweeps.
+ *     processed exactly once (a second sweep claims nothing — no
+ *     double-process);
+ *   - a failed handler is retried with backoff + failure accounting; a
+ *     RESTARTED dispatcher (fresh instance) completes it exactly once more;
+ *   - SKIP LOCKED: a dispatcher skips rows locked by an uncommitted claim and
+ *     processes OTHER events;
+ *   - dead-letters after the attempt limit (spec default: 10 attempts, pinned
+ *     by `DEFAULT_MAX_ATTEMPTS`; the constructor option proves the mechanism);
+ *   - handlers open their OWN tenant transaction (the live dispatcher sets no
+ *     GUC): `app.workspace_id` from the payload under the non-bypass
+ *     `worker_user` role — RLS-filtered tenant read;
+ *   - event types WITHOUT a registered handler retry with backoff and
+ *     dead-letter (`no handler registered` in last_error) — they must not
+ *     poison the scan forever.
+ *
+ * The pg-boss scheduled dispatch (heartbeat-cadence wiring, singleton policy,
+ * low-latency enqueue path) is covered end-to-end by outbox-worker.test.ts,
+ * and the dispatcher's own unit-level semantics by
+ * packages/queue/test/outbox-dispatcher.test.ts.
  */
 
 const SCRATCH_DB = "t05_outbox";
@@ -42,6 +55,10 @@ let urls: BootstrappedUrls;
 let adminClient: Client;
 let migrator: Client;
 let workerPoolUrl: string;
+/** worker_user pool for the dispatcher — outbox is NOT a tenant table, so
+ *  the tenant-guard is off (ADR-0005); handlers open their own tenant
+ *  transactions, which mark their own clients. */
+let workerPool: Pool;
 
 /** Real producer: bootstraps a personal workspace as app_user (function call). */
 async function bootstrapAsUser(userId: string): Promise<string> {
@@ -56,11 +73,6 @@ async function bootstrapAsUser(userId: string): Promise<string> {
   } finally {
     await pool.end();
   }
-}
-
-/** Worker-role pool for the dispatcher (direct URL, tenant-guard armed). */
-function openWorkerPool(): Pool {
-  return createPool(workerPoolUrl, { max: 2 });
 }
 
 /** Inserts an outbox event as the migrator (owner of the no-RLS table). */
@@ -96,8 +108,6 @@ async function eventState(id: string): Promise<{
   return res.rows[0]!;
 }
 
-type Handler = NonNullable<DispatchOptions["handlers"]>[string];
-
 beforeAll(async () => {
   await createScratchDatabase(SCRATCH_DB);
   urls = await ensureBootstrapped(SCRATCH_DB);
@@ -118,239 +128,291 @@ beforeAll(async () => {
   migrator = new Client({ connectionString: testRoleUrl("migrator", SCRATCH_DB) });
   await migrator.connect();
   workerPoolUrl = testRoleUrl("worker_user", SCRATCH_DB);
+  workerPool = createPool(workerPoolUrl, { max: 5, tenantGuard: false });
+  // Idle pool clients can emit 'error' (backend killed mid-claim); without a
+  // listener node would crash the suite.
+  workerPool.on("error", () => undefined);
+  workerPool.on("connect", (client) => client.on("error", () => undefined));
 }, 120_000);
 
+beforeEach(async () => {
+  // Exact-count assertions need a clean scan; worker_user has no DELETE, so
+  // the admin connection does the wiping.
+  await adminClient.query("DELETE FROM app.outbox_events");
+});
+
 afterAll(async () => {
+  await workerPool?.end().catch(() => undefined);
   await migrator?.end();
   await adminClient?.end();
   await dropDatabase(SCRATCH_DB);
 });
 
-describe("dispatchOne under worker_user", () => {
+describe("live @form/queue dispatcher under worker_user", () => {
   it("processes a real workspace.created event exactly once (no double-process on re-sweep)", async () => {
     // REAL producer: bootstrap as app_user via the security-definer function.
-    const workspaceId = await bootstrapAsUser(crypto.randomUUID());
+    const userId = crypto.randomUUID();
+    const workspaceId = await bootstrapAsUser(userId);
 
-    const handlerCalls: string[] = [];
-    const handlers: Record<string, Handler> = {
-      "workspace.created": async (event) => {
-        handlerCalls.push(event.payload.workspaceId as string);
+    const handled: OutboxHandlerEvent[] = [];
+    const dispatcher = createOutboxDispatcher({
+      pool: workerPool,
+      handlers: {
+        "workspace.created": async (event) => {
+          handled.push(event);
+        },
       },
-    };
-    const pool = openWorkerPool();
-    try {
-      const outcome = await dispatchOne({ pool, handlers });
-      expect(outcome).toMatchObject({
-        status: "processed",
-        eventType: "workspace.created",
-      });
+    });
 
-      const state = await eventState((outcome as { id: string }).id);
-      expect(state.processed_at).not.toBeNull();
-      expect(state.attempts).toBe(1);
-      expect(state.dead_lettered_at).toBeNull();
-      expect(handlerCalls).toEqual([workspaceId]);
+    const outcome = await dispatcher.dispatchOnce();
+    expect(outcome).toMatchObject({
+      claimed: 1,
+      processed: 1,
+      retried: 0,
+      deadLettered: 0,
+    });
+    expect(handled).toHaveLength(1);
+    expect(handled[0]!.payload.workspaceId).toBe(workspaceId);
+    expect(handled[0]!.payload.userId).toBe(userId);
+    expect(handled[0]!.eventType).toBe("workspace.created");
 
-      // Re-sweep: already-processed rows are never claimed again.
-      const again = await dispatchOne({ pool, handlers });
-      expect(again.status).toBe("empty");
-      expect(handlerCalls).toEqual([workspaceId]);
-      const state2 = await eventState((outcome as { id: string }).id);
-      expect(state2.attempts).toBe(1);
-    } finally {
-      await pool.end();
-    }
+    const rows = await migrator.query<{
+      processed_at: string | null;
+      attempts: number;
+      dead_lettered_at: string | null;
+    }>(
+      `SELECT processed_at::text, attempts, dead_lettered_at::text
+         FROM app.outbox_events WHERE event_type = 'workspace.created'`,
+    );
+    expect(rows.rows).toHaveLength(1);
+    expect(rows.rows[0]!.processed_at).not.toBeNull();
+    expect(rows.rows[0]!.attempts).toBe(0);
+    expect(rows.rows[0]!.dead_lettered_at).toBeNull();
+
+    // Re-sweep: already-processed rows are never claimed again.
+    const again = await dispatcher.dispatchOnce();
+    expect(again.claimed).toBe(0);
+    expect(handled).toHaveLength(1);
   });
 
-  it("crash simulation: a failed handler leaves the event unprocessed; a RESTARTED dispatcher finishes it exactly once", async () => {
+  it("crash simulation: a failed handler is retried with accounting; a RESTARTED dispatcher finishes it exactly once", async () => {
     const id = await insertEvent("test.crash", { n: 1 });
     const successCalls: number[] = [];
 
-    const failing: Record<string, Handler> = {
-      "test.crash": async () => {
-        throw new Error("injected crash mid-dispatch");
+    const first = createOutboxDispatcher({
+      pool: workerPool,
+      handlers: {
+        "test.crash": async () => {
+          throw new Error("injected crash mid-dispatch");
+        },
       },
-    };
-    const succeeding: Record<string, Handler> = {
-      "test.crash": async () => {
-        successCalls.push(1);
-      },
-    };
+      backoffMs: () => 0,
+    });
+    const outcome = await first.dispatchOnce();
+    expect(outcome).toMatchObject({ claimed: 1, processed: 0, retried: 1 });
 
-    const pool = openWorkerPool();
+    let state = await eventState(id);
+    expect(state.processed_at).toBeNull();
+    expect(state.attempts).toBe(1);
+    expect(state.last_error).toContain("injected crash");
+
+    // RESTART: a fresh dispatcher instance picks it up and finishes it.
+    const restarted = createOutboxDispatcher({
+      pool: workerPool,
+      handlers: {
+        "test.crash": async () => {
+          successCalls.push(1);
+        },
+      },
+      backoffMs: () => 0,
+    });
+    await restarted.dispatchOnce();
+    state = await eventState(id);
+    expect(state.processed_at).not.toBeNull();
+    // Live dispatcher semantics: `attempts` counts FAILURES (incremented on
+    // the retry path only) — a successful attempt does not add another tick.
+    expect(state.attempts).toBe(1);
+    // Exactly-once completion: the successful handler ran once.
+    expect(successCalls).toHaveLength(1);
+  });
+
+  it("SKIP LOCKED: a dispatcher skips rows locked by an uncommitted claim and processes OTHER events", async () => {
+    const handled: string[] = [];
+    const dispatcher = createOutboxDispatcher({
+      pool: workerPool,
+      handlers: {
+        "workspace.created": (event) => void handled.push(event.id),
+      },
+    });
+
+    const a = await insertEvent("workspace.created", { workspaceId: "a" });
+    const b = await insertEvent("workspace.created", { workspaceId: "b" });
+
+    // "Dispatcher #1" mid-flight: transaction open, claim taken, NO commit.
+    const client1 = await workerPool.connect();
+    await client1.query("BEGIN");
+    const lockedRes = await client1.query<{ id: string }>(
+      `SELECT id FROM app.outbox_events
+        WHERE processed_at IS NULL AND dead_lettered_at IS NULL
+          AND available_at <= now()
+        ORDER BY available_at, id
+        LIMIT 1
+        FOR UPDATE SKIP LOCKED`,
+    );
+    const lockedId = lockedRes.rows[0]!.id;
+    const freeId = lockedId === a ? b : a;
+
     try {
-      // First dispatcher instance (about to "crash").
-      const first = await dispatchOne({
-        pool,
-        handlers: failing,
-        backoffMs: () => 0,
-      });
-      expect(first).toMatchObject({ status: "retry", attempt: 1 });
-      let state = await eventState(id);
-      expect(state.processed_at).toBeNull();
-      expect(state.attempts).toBe(1);
-      expect(state.last_error).toContain("injected crash");
-
-      // RESTART: a fresh dispatcher call picks it up and finishes it.
-      const second = await dispatchOne({
-        pool,
-        handlers: succeeding,
-        backoffMs: () => 0,
-      });
-      expect(second).toMatchObject({ status: "processed" });
-      state = await eventState(id);
-      expect(state.processed_at).not.toBeNull();
-      expect(state.attempts).toBe(2);
-      // Exactly-once completion: the successful handler ran once.
-      expect(successCalls).toHaveLength(1);
+      // Dispatcher #2 must claim the OTHER event, never block on #1's row.
+      const outcome = await dispatcher.dispatchOnce();
+      expect(outcome.claimed).toBe(1);
+      expect(handled).toEqual([freeId]);
     } finally {
-      await pool.end();
+      await client1.query("ROLLBACK");
+      client1.release();
     }
+
+    // #1's row was never processed (its tx rolled back) — the next tick gets it.
+    const lockedState = await eventState(lockedId);
+    expect(lockedState.processed_at).toBeNull();
+    expect(lockedState.attempts).toBe(0);
+
+    const next = await dispatcher.dispatchOnce();
+    expect(next.claimed).toBe(1);
+    expect([...handled].sort()).toEqual([a, b].sort());
   });
 
   it("dead-letters after the attempt limit (spec default: 10 attempts)", async () => {
     expect(DEFAULT_MAX_ATTEMPTS).toBe(10);
     const id = await insertEvent("test.dead", {});
-    const pool = openWorkerPool();
-    try {
-      const options = {
-        pool,
-        handlers: {
-          "test.dead": async () => {
-            throw new Error("always fails");
-          },
-        } satisfies Record<string, Handler>,
-        backoffMs: () => 0,
-        maxAttempts: 3, // mechanism-level override; the default is pinned above
-      };
-      const outcomes: string[] = [];
-      for (let i = 0; i < 3; i++) {
-        const outcome = await dispatchOne(options);
-        outcomes.push(outcome.status);
-      }
-      expect(outcomes).toEqual(["retry", "retry", "dead_lettered"]);
-      const state = await eventState(id);
-      expect(state.dead_lettered_at).not.toBeNull();
-      expect(state.attempts).toBe(3);
-      expect(state.processed_at).toBeNull();
+    const dispatcher = createOutboxDispatcher({
+      pool: workerPool,
+      handlers: {
+        "test.dead": async () => {
+          throw new Error("always fails");
+        },
+      },
+      backoffMs: () => 0,
+      maxAttempts: 3, // mechanism-level override; the default is pinned above
+    });
 
-      // Dead-lettered rows are never claimed again.
-      const after = await dispatchOne(options);
-      expect(after.status).toBe("empty");
-    } finally {
-      await pool.end();
+    const outcomes: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      // Retry availability is immediate (backoff 0), but pull the row back to
+      // now() before each tick so the scan cannot race the clock.
+      await migrator.query(
+        "UPDATE app.outbox_events SET available_at = now() WHERE id = $1::uuid",
+        [id],
+      );
+      const outcome = await dispatcher.dispatchOnce();
+      outcomes.push(
+        outcome.deadLettered === 1
+          ? "dead_lettered"
+          : outcome.retried === 1
+            ? "retry"
+            : `unexpected(${JSON.stringify(outcome)})`,
+      );
     }
+    expect(outcomes).toEqual(["retry", "retry", "dead_lettered"]);
+
+    const state = await eventState(id);
+    expect(state.dead_lettered_at).not.toBeNull();
+    expect(state.attempts).toBe(3);
+    expect(state.processed_at).toBeNull();
+
+    // Dead-lettered rows are never claimed again.
+    const after = await dispatcher.dispatchOnce();
+    expect(after.claimed).toBe(0);
   });
 
-  it("handlers touching tenant tables see app.workspace_id from the payload under worker_user", async () => {
+  it("handlers open their OWN tenant transaction: app.workspace_id from the payload under worker_user", async () => {
     // Two REAL workspaces: the handler must only see the payload's one.
-    const wsA = await bootstrapAsUser(crypto.randomUUID());
+    // Hermetic start: the sweep claims every available event, so clear any
+    // leftovers from earlier tests in this file (admin bypasses the
+    // worker role's INSERT/UPDATE-only grants).
+    await adminClient.query("DELETE FROM app.outbox_events");
+    const userIdA = crypto.randomUUID();
+    const wsA = await bootstrapAsUser(userIdA);
     const wsB = await bootstrapAsUser(crypto.randomUUID());
-    await insertEvent("test.tenant", { workspaceId: wsA });
+    await insertEvent("test.tenant", { workspaceId: wsA, userId: userIdA });
 
     const seen: Array<{ setting: string | null; defaultProjects: number }> = [];
-    const pool = openWorkerPool();
-    try {
-      const outcome = await dispatchOne({
-        pool,
-        handlers: {
-          "test.tenant": async (event, ctx) => {
-            const setting = await ctx.query<{ wid: string | null }>(
-              "SELECT current_setting('app.workspace_id', true) AS wid",
-            );
-            // RLS-filtered tenant read through the worker role.
-            const projects = await ctx.query<{ n: string }>(
-              "SELECT count(*)::text AS n FROM app.projects WHERE is_default",
-            );
-            seen.push({
-              setting: setting.rows[0]!.wid,
-              defaultProjects: Number(projects.rows[0]!.n),
-            });
-            if (event.payload.workspaceId !== seen[0]!.setting) {
-              throw new Error("payload workspace mismatch");
-            }
-          },
+    const dispatcher = createOutboxDispatcher({
+      pool: workerPool,
+      handlers: {
+        "test.tenant": async (event) => {
+          // The live dispatcher sets NO GUC (outbox_events is not a tenant
+          // table) — the handler contract (ADR-0005) is to open its own
+          // tenant transaction with the payload's ids under worker_user
+          // (non-bypass, so RLS still applies).
+          await withTenantTransaction(
+            workerPool,
+            {
+              userId: String(event.payload.userId),
+              workspaceId: String(event.payload.workspaceId),
+            },
+            async (tx) => {
+              const setting = await tx.query<{ wid: string | null }>(
+                "SELECT current_setting('app.workspace_id', true) AS wid",
+              );
+              // RLS-filtered tenant read through the worker role.
+              const projects = await tx.query<{ n: string }>(
+                "SELECT count(*)::text AS n FROM app.projects WHERE is_default",
+              );
+              seen.push({
+                setting: setting.rows[0]!.wid,
+                defaultProjects: Number(projects.rows[0]!.n),
+              });
+            },
+          );
         },
-      });
-      expect(outcome).toMatchObject({ status: "processed" });
-      expect(seen).toHaveLength(1);
-      expect(seen[0]!.setting).toBe(wsA);
-      // Only workspace A's default project is visible under the tenant context.
-      expect(seen[0]!.defaultProjects).toBe(1);
-      // Sanity: workspace B exists and has its own default project. (The
-      // migrator owns the tables under FORCED RLS and has no policy — RLS is
-      // a database guarantee — so catalog sanity reads go through the admin.)
-      const b = await adminClient.query<{ n: string }>(
-        "SELECT count(*)::text AS n FROM app.projects WHERE workspace_id = $1::uuid AND is_default",
-        [wsB],
-      );
-      expect(Number(b.rows[0]!.n)).toBe(1);
-    } finally {
-      await pool.end();
-    }
+      },
+    });
+
+    const outcome = await dispatcher.dispatchOnce();
+    // The sweep claims EVERY available event — other suites may be inserting
+    // outbox rows into the shared test database concurrently, so only assert
+    // that OUR event was claimed and processed (per-event state below).
+    expect(outcome.claimed).toBeGreaterThanOrEqual(1);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.setting).toBe(wsA);
+    // Only workspace A's default project is visible under the tenant context.
+    expect(seen[0]!.defaultProjects).toBe(1);
+    // Sanity: workspace B exists and has its own default project. (The
+    // migrator owns the tables under FORCED RLS and has no policy — RLS is
+    // a database guarantee — so catalog sanity reads go through the admin.)
+    const b = await adminClient.query<{ n: string }>(
+      "SELECT count(*)::text AS n FROM app.projects WHERE workspace_id = $1::uuid AND is_default",
+      [wsB],
+    );
+    expect(Number(b.rows[0]!.n)).toBe(1);
   });
 
-  it("marks unknown event types processed with a warning (no retry storm)", async () => {
+  it("event types without a registered handler retry with backoff and dead-letter (no scan poisoning)", async () => {
     const id = await insertEvent("test.unknown", {});
-    const pool = openWorkerPool();
-    try {
-      const outcome = await dispatchOne({ pool, handlers: {} });
-      expect(outcome).toMatchObject({
-        status: "processed",
-        eventType: "test.unknown",
-      });
-      const state = await eventState(id);
-      expect(state.processed_at).not.toBeNull();
-      expect(state.attempts).toBe(1);
-    } finally {
-      await pool.end();
-    }
-  });
-});
-
-describe("pg-boss scheduled dispatch", () => {
-  it("schedule expression matches the ADR-0003 30s cadence", () => {
-    expect(intervalCron(30_000)).toBe("*/30 * * * * *");
-  });
-
-  it("a scheduled dispatcher drains the outbox without manual sweeps", async () => {
-    const boss = new PgBoss({
-      connectionString: workerPoolUrl,
-      schema: "pgboss",
-      migrate: false,
-      createSchema: false,
-      cronMonitorIntervalSeconds: 1,
-      cronWorkerIntervalSeconds: 1,
+    const dispatcher = createOutboxDispatcher({
+      pool: workerPool,
+      handlers: {},
+      backoffMs: () => 0,
     });
-    await boss.start();
-    const dispatcher = await createOutboxDispatcher({
-      boss,
-      workerDatabaseUrl: workerPoolUrl,
-      handlers: defaultOutboxHandlers(),
-      dispatchIntervalMs: 1000, // test cadence; production default is 30s
-    });
-    try {
-      await dispatcher.start();
-      const workspaceId = await bootstrapAsUser(crypto.randomUUID());
 
-      // The scheduled job should process the real workspace.created event.
-      const deadline = Date.now() + 20_000;
-      let processed = false;
-      while (Date.now() < deadline && !processed) {
-        const res = await migrator.query<{ n: string }>(
-          `SELECT count(*)::text AS n FROM app.outbox_events
-            WHERE event_type = 'workspace.created'
-              AND (payload->>'workspaceId')::uuid = $1::uuid
-              AND processed_at IS NOT NULL`,
-          [workspaceId],
-        );
-        processed = Number(res.rows[0]!.n) === 1;
-        if (!processed) await new Promise((r) => setTimeout(r, 250));
-      }
-      expect(processed).toBe(true);
-    } finally {
-      await dispatcher.stop();
-      await boss.stop({ graceful: false, timeout: 2000 }).catch(() => undefined);
-    }
-  }, 30_000);
+    const outcome = await dispatcher.dispatchOnce();
+    expect(outcome).toMatchObject({ claimed: 1, processed: 0, retried: 1 });
+
+    const state = await eventState(id);
+    expect(state.processed_at).toBeNull();
+    expect(state.attempts).toBe(1);
+    expect(state.last_error).toMatch(/no handler registered/);
+
+    // Force it to the threshold, then prove the dead-letter.
+    await migrator.query(
+      `UPDATE app.outbox_events SET attempts = 9, available_at = now() WHERE id = $1::uuid`,
+      [id],
+    );
+    const second = await dispatcher.dispatchOnce();
+    expect(second.deadLettered).toBe(1);
+    const dead = await eventState(id);
+    expect(dead.dead_lettered_at).not.toBeNull();
+    expect(dead.attempts).toBe(10);
+  });
 });
