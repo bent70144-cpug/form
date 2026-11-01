@@ -4,7 +4,10 @@ import path from "node:path";
 import {
   createDashboardForm,
   renameDashboardForm,
+  saveDraftForm,
 } from "../src/lib/forms-client";
+import { emptyDraft } from "@form/form-schema";
+import type { FormDraftSchema } from "@form/contracts";
 import { en } from "@form/i18n";
 
 /**
@@ -111,11 +114,97 @@ describe("renameDashboardForm (browser mutation)", () => {
   });
 });
 
+describe("saveDraftForm (ticket 07 — browser draft save)", () => {
+  const FORM_ID = "018f0b2e-6f7a-7c3e-9a1b-2c3d4e5f6a7b";
+  const draft = (): { draftVersion: number; schema: FormDraftSchema } => ({
+    draftVersion: 2,
+    schema: emptyDraft() as FormDraftSchema,
+  });
+
+  it("PUTs the FULL envelope + last-seen draftVersion through the same-origin rewrite", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
+      jsonResponse(200, { draftVersion: 3 }),
+    );
+    const outcome = await saveDraftForm(FORM_ID, draft(), { fetchImpl });
+    expect(outcome).toEqual({ ok: true, draftVersion: 3 });
+
+    const [url, init] = fetchImpl.mock.calls[0]!;
+    expect(url).toBe(`/v1/forms/${FORM_ID}/draft`);
+    expect(init?.method).toBe("PUT");
+    expect(init?.credentials).toBe("same-origin");
+    expect(JSON.parse(String(init?.body))).toEqual({
+      schema: emptyDraft(),
+      draftVersion: 2,
+    });
+  });
+
+  it("short-circuits an invalid draft locally via the SHARED engine (no request)", async () => {
+    const fetchImpl = vi.fn<typeof fetch>();
+    const bad = draft();
+    // Unknown field in a block — the shared engine rejects it (strict).
+    bad.schema = {
+      ...emptyDraft(),
+      blocks: [
+        {
+          id: "abcdefghijk",
+          kind: "short_text",
+          label: "Name",
+          required: false,
+          notPartOfSchema: true,
+        },
+      ],
+    } as unknown as FormDraftSchema;
+    const outcome = await saveDraftForm(FORM_ID, bad, { fetchImpl });
+    expect(outcome).toEqual({ ok: false, reason: "invalid_draft" });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("maps 409 draft_conflict to `conflict` and other problems to `failed`", async () => {
+    const conflict = vi.fn<typeof fetch>(async () =>
+      new Response(
+        JSON.stringify({ code: "draft_conflict" }),
+        { status: 409, headers: { "content-type": "application/problem+json" } },
+      ),
+    );
+    expect(await saveDraftForm(FORM_ID, draft(), { fetchImpl: conflict })).toEqual({
+      ok: false,
+      reason: "conflict",
+    });
+
+    const invalid = vi.fn<typeof fetch>(async () =>
+      new Response(JSON.stringify({ code: "validation_failed" }), { status: 422 }),
+    );
+    expect(await saveDraftForm(FORM_ID, draft(), { fetchImpl: invalid })).toEqual({
+      ok: false,
+      reason: "failed",
+    });
+
+    const networkDown = vi.fn<typeof fetch>(async () => {
+      throw new Error("down");
+    });
+    expect(await saveDraftForm(FORM_ID, draft(), { fetchImpl: networkDown })).toEqual({
+      ok: false,
+      reason: "failed",
+    });
+  });
+
+  it("rejects a drifted success body (contract-parsed, not hand-shaped)", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
+      jsonResponse(200, { draftVersion: 0 }), // version must be ≥ 1
+    );
+    expect(await saveDraftForm(FORM_ID, draft(), { fetchImpl })).toEqual({
+      ok: false,
+      reason: "failed",
+    });
+  });
+});
+
 describe("dashboard source contracts (ticket 06)", () => {
   it("mutations are client components calling the same-origin lib helpers", () => {
     for (const component of [
       "src/app/dashboard/NewFormButton.tsx",
       "src/app/dashboard/RenameForm.tsx",
+      "src/app/dashboard/forms/[id]/SaveDraftButton.tsx",
     ]) {
       const source = readWebSource(component);
       expect(source).toContain('"use client"');
@@ -149,11 +238,36 @@ describe("dashboard source contracts (ticket 06)", () => {
     expect(formPage).toContain("RenameForm");
   });
 
+  it("the form page wires the ticket-07 minimal draft save (builder is T08)", () => {
+    const formPage = readWebSource("src/app/dashboard/forms/[id]/page.tsx");
+    expect(formPage).toContain("SaveDraftButton");
+    expect(formPage).toContain("draftVersion={form.draft.draftVersion}");
+    expect(formPage).toContain("schema={form.draft.schema}");
+  });
+
+  it("the draft save consumes the SHARED contracts + engine (no duplicated rules)", () => {
+    const client = readWebSource("src/lib/forms-client.ts");
+    expect(client).toContain('from "@form/contracts"');
+    expect(client).toContain('from "@form/form-schema"');
+    expect(client).toContain("validateDraftSchema");
+    expect(client).toContain("draftSaveRequestSchema");
+    expect(client).toContain("draftSaveResponseSchema");
+    // No copied rule constants: the engine owns IDs, limits and caps.
+    expect(client).not.toMatch(/A-Za-z0-9_-/);
+    expect(client).not.toMatch(/256\s*\*\s*1024|307200|64\s*\*\s*1024/);
+  });
+
   it("uses the catalog strings (no hardcoded copy)", () => {
     expect(en.dashboard.forms.newForm).toBe("New form");
     expect(en.dashboard.forms.untitled).toBe("Untitled form");
     expect(typeof en.dashboard.forms.createFailed).toBe("string");
     expect(typeof en.dashboard.forms.renameFailed).toBe("string");
     expect(en.dashboard.forms.draftVersion).toContain("{version}");
+    // Ticket 07 draft-save UI strings.
+    expect(typeof en.dashboard.forms.save).toBe("string");
+    expect(en.dashboard.forms.saved).toContain("{version}");
+    expect(typeof en.dashboard.forms.saveFailed).toBe("string");
+    expect(typeof en.dashboard.forms.saveConflict).toBe("string");
+    expect(typeof en.dashboard.forms.saveInvalid).toBe("string");
   });
 });

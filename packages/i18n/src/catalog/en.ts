@@ -54,6 +54,13 @@ export const en = {
       renameLabel: "New name",
       saving: "Saving…",
       renameFailed: "Renaming failed. Please try again.",
+      save: "Save draft",
+      saved: "Saved (version {version})",
+      saveFailed: "Saving the draft failed. Please try again.",
+      saveConflict:
+        "The draft changed in another tab. Reload the form and re-apply your changes.",
+      saveInvalid:
+        "This draft cannot be saved yet: it contains invalid content.",
       backToDashboard: "Back to dashboard",
       draftLabel: "Draft",
       draftVersion: "Draft version {version}",

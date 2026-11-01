@@ -5,6 +5,7 @@ import type { FormBlock } from "@form/contracts";
 import { getServerSession } from "../../../../lib/session";
 import { getForm } from "../../../../lib/forms";
 import RenameForm from "../../RenameForm";
+import SaveDraftButton from "./SaveDraftButton";
 
 /**
  * Form page shell (ticket 06) — read-only preview of the mutable draft.
@@ -19,8 +20,10 @@ import RenameForm from "../../RenameForm";
  * - the respondent-facing title is the draft envelope's `title`, which the
  *   builder (ticket 08) edits; M0's empty draft shows the "Untitled form"
  *   placeholder;
- * - the draft's blocks render read-only: this slice has no editing, no
- *   publish controls, and no public page (tickets 08/09).
+ * - the draft's blocks render read-only, with the ticket-07 minimal SAVE
+ *   control (full-envelope PUT through the same-origin rewrite); this slice
+ *   has no block editing, no publish controls, and no public page
+ *   (tickets 08/09).
  */
 export default async function FormPage(props: {
   params: Promise<{ id: string }>;
@@ -55,6 +58,14 @@ export default async function FormPage(props: {
         {t("dashboard.forms.draftVersion", {
           version: form.draft.draftVersion,
         })}
+      </p>
+      {/* Ticket 07: the minimal save path (builder editing is ticket 08). */}
+      <p>
+        <SaveDraftButton
+          formId={form.id}
+          draftVersion={form.draft.draftVersion}
+          schema={form.draft.schema}
+        />
       </p>
 
       <Blocks blocks={form.draft.schema.blocks} />
