@@ -3,6 +3,7 @@ import type { DynamicModule } from "@nestjs/common";
 import type { Pool } from "pg";
 import type { Auth } from "@form/auth/server";
 import { RateLimiter } from "./common/rate-limit";
+import type { TrustedIpConfig } from "./common/trusted-ip";
 import { HealthController } from "./health.controller";
 import { SessionController } from "./auth/session.controller";
 import { VerifiedProbeController } from "./auth/probe.controller";
@@ -17,6 +18,12 @@ import { FormsController } from "./forms/forms.controller";
 import { PublishService } from "./forms/publish.service";
 import { PublishController } from "./forms/publish.controller";
 import { PublicFormController } from "./public/public.controller";
+import { PublicSessionService } from "./public/public-session.service";
+import { PublicSubmissionsService } from "./public/public-submissions.service";
+import {
+  PublicFormSessionController,
+  PublicSubmissionController,
+} from "./public/public-session.controller";
 
 /**
  * Root NestJS module. Auth-dependent providers arrive through the
@@ -48,7 +55,20 @@ import { PublicFormController } from "./public/public.controller";
  */
 @Module({})
 export class AppModule {
-  static withAuth(auth: Auth, limiter: RateLimiter, dbPool: Pool): DynamicModule {
+  /** Values the ticket-10 public services need from the process env/config. */
+  static withAuth(
+    auth: Auth,
+    limiter: RateLimiter,
+    dbPool: Pool,
+    publicConfig: {
+      /** Trusted-proxy config for the public session rate-limit keys. */
+      trustedIpConfig: TrustedIpConfig;
+      /** HMAC key for the stored session ip_hash (server secret). */
+      ipHashSecret: string;
+      /** Per-form submission cap enforced on the submit route. */
+      submissionCap: number;
+    },
+  ): DynamicModule {
     return {
       module: AppModule,
       providers: [
@@ -61,6 +81,11 @@ export class AppModule {
         TenantRequestContextInterceptor,
         FormsService,
         PublishService,
+        PublicSessionService,
+        PublicSubmissionsService,
+        { provide: "PUBLIC_TRUSTED_IP_CONFIG", useValue: publicConfig.trustedIpConfig },
+        { provide: "PUBLIC_IP_HASH_SECRET", useValue: publicConfig.ipHashSecret },
+        { provide: "PUBLIC_SUBMISSION_CAP", useValue: publicConfig.submissionCap },
       ],
       controllers: [
         HealthController,
@@ -70,6 +95,8 @@ export class AppModule {
         FormsController,
         PublishController,
         PublicFormController,
+        PublicFormSessionController,
+        PublicSubmissionController,
       ],
     };
   }

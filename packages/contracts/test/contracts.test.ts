@@ -16,7 +16,10 @@ import {
   problemDetailsSchema,
   problemType,
   renameFormRequestSchema,
+  sessionCreateResponseSchema,
   sessionResponseSchema,
+  submitReceiptSchema,
+  submitRequestSchema,
   workspaceSchema,
 } from "../src/index";
 
@@ -69,6 +72,12 @@ describe("contracts", () => {
         "too_many_blocks",
         "unsupported_schema_version",
         "submission_too_large",
+        // Ticket 10 — public session/submit discriminators (additive).
+        "session_required",
+        "session_not_found",
+        "session_expired",
+        "session_completed",
+        "form_closed",
         "rate_limited",
         "internal_error",
       ].sort(),
@@ -251,5 +260,59 @@ describe("openapi document", () => {
     expect(
       doc.paths["/v1/workspaces/bootstrap"]?.post?.operationId,
     ).toBe("bootstrapWorkspace");
+  });
+});
+
+describe("public session + submission contracts (ticket 10)", () => {
+  const SCHEMA = {
+    schemaVersion: 1,
+    title: "Feedback",
+    blocks: [],
+    logic: [],
+    theme: { preset: "default" },
+    settings: {},
+  };
+
+  it("sessionCreateResponseSchema: token once + pinned version + snapshot", () => {
+    const parsed = sessionCreateResponseSchema.safeParse({
+      token: "AbC123def456ghi789jkl012mno345pqr678stuv901",
+      expiresAt: "2026-11-01T12:00:00.000Z",
+      pinnedVersionId: "018f0b2e-6f7a-7c3e-9a1b-2c3d4e5f6a7b",
+      schema: SCHEMA,
+    });
+    expect(parsed.success).toBe(true);
+    // Strict: no extra fields (the raw token must be the ONLY secret).
+    expect(
+      sessionCreateResponseSchema.safeParse({
+        token: "AbC123def456ghi789jkl012mno345pqr678stuv901",
+        expiresAt: "2026-11-01T12:00:00.000Z",
+        pinnedVersionId: "018f0b2e-6f7a-7c3e-9a1b-2c3d4e5f6a7b",
+        schema: SCHEMA,
+        submissionId: "018f0b2e-6f7a-7c3e-9a1b-2c3d4e5f6a7c",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("submitRequestSchema: answers object envelope", () => {
+    expect(submitRequestSchema.safeParse({ answers: { b1: "x" } }).success).toBe(true);
+    expect(submitRequestSchema.safeParse({ answers: {} }).success).toBe(true);
+    // Array answers are not an object envelope; extra fields are rejected.
+    expect(submitRequestSchema.safeParse({ answers: [] }).success).toBe(false);
+    expect(submitRequestSchema.safeParse({ answers: {}, extra: 1 }).success).toBe(false);
+  });
+
+  it("submitReceiptSchema: submitted true + submission id, never answers", () => {
+    const receipt = { submitted: true, submissionId: "018f0b2e-6f7a-7c3e-9a1b-2c3d4e5f6a7b" };
+    expect(submitReceiptSchema.safeParse(receipt).success).toBe(true);
+    expect(submitReceiptSchema.safeParse({ ...receipt, answers: { b1: "x" } }).success).toBe(false);
+    expect(submitReceiptSchema.safeParse({ submitted: false, submissionId: receipt.submissionId }).success).toBe(false);
+  });
+
+  it("exposes the ticket-10 routes in the openapi document", () => {
+    const doc = buildOpenApiDocument() as {
+      paths: Record<string, Record<string, { operationId?: string }>>;
+    };
+    expect(doc.paths["/v1/public/forms/{slug}/sessions"]?.post?.operationId).toBe("createPublicSession");
+    expect(doc.paths["/v1/public/submissions"]?.post?.operationId).toBe("submitPublicForm");
   });
 });

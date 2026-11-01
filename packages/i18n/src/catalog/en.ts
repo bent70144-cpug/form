@@ -277,6 +277,27 @@ export const en = {
       detail:
         "No active workspace yet. Call POST /v1/workspaces/bootstrap to create your personal workspace.",
     },
+    /** Ticket 10 — public session/submit route discriminators. */
+    sessionRequired: {
+      title: "Form session missing",
+      detail: "Start the form again to get a new session, then submit once.",
+    },
+    sessionNotFound: {
+      title: "Form session not found",
+      detail: "This form session is no longer valid. Start the form again.",
+    },
+    sessionExpired: {
+      title: "Form session expired",
+      detail: "This form session has expired. Start the form again to submit.",
+    },
+    sessionCompleted: {
+      title: "Form session already used",
+      detail: "This form session has already been submitted.",
+    },
+    formClosed: {
+      title: "This form is closed",
+      detail: "This form is not accepting responses right now.",
+    },
   },
   public: {
     form: {
@@ -286,6 +307,20 @@ export const en = {
       requiredMark: "required",
       optionalMark: "optional",
       formTitleFallback: "Form",
+      // Ticket 10 — interactive session/submit UI strings.
+      startTitle: "Start",
+      submitButton: "Submit",
+      submittingButton: "Submitting…",
+      sessionStarting: "Starting…",
+      sessionStartFailed:
+        "The form could not be started. Please reload the page and try again.",
+      submitFailed: "Your answers could not be submitted. Please try again.",
+      formClosedInline: "This form is not accepting responses anymore.",
+      sessionExpiredInline:
+        "Your session expired. Reload the page to start again.",
+      endingTitleFallback: "Thank you!",
+      submittedDetail: "Your response has been received.",
+      fixErrorsDetail: "Please fix the highlighted fields below.",
     },
   },
 } as const;

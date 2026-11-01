@@ -4,4 +4,5 @@ export * from "./schemas/errors";
 export * from "./schemas/workspace";
 export * from "./schemas/form";
 export * from "./schemas/publish";
+export * from "./schemas/public-session";
 export * from "./openapi";

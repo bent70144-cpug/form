@@ -22,6 +22,11 @@ import {
   publicFormResponseSchema,
   unpublishResponseSchema,
 } from "./schemas/publish";
+import {
+  sessionCreateResponseSchema,
+  submitReceiptSchema,
+  submitRequestSchema,
+} from "./schemas/public-session";
 
 /**
  * OpenAPI 3.1 document generated from the shared Zod contracts (spec: "a
@@ -516,6 +521,160 @@ export function buildOpenApiDocument(): Record<string, unknown> {
           },
         },
       },
+      "/v1/public/forms/{slug}/sessions": {
+        post: {
+          operationId: "createPublicSession",
+          tags: ["forms"],
+          summary:
+            "Create a pinned public session (UNauthenticated, cookie-less)",
+          description:
+            "Wraps the security-definer resolve_public_form(slug) — only published, non-deleted forms resolve (404 otherwise). Returns the RAW session token ONCE (only its SHA-256 hash is stored), the 24h expiry, the pinned published version id, and the pinned schema. Rate-limited to 30 requests per hour per trusted client IP AND per form (429 rate_limited). app.workspace_id is set from the resolved form, never from the client; a forged workspace header is ignored.",
+          parameters: [
+            {
+              name: "slug",
+              in: "path",
+              required: true,
+              schema: { type: "string", pattern: "^[A-Za-z0-9]{10}$" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "The pinned session (token returned once)",
+              content: {
+                "application/json": {
+                  schema: zodToJsonSchema(sessionCreateResponseSchema, {
+                    target: "openApi3",
+                  }),
+                },
+              },
+            },
+            "404": {
+              description:
+                "Unknown slug, or the form is not currently published (`not_found`)",
+              content: {
+                "application/problem+json": {
+                  schema: zodToJsonSchema(problemDetailsSchema, {
+                    target: "openApi3",
+                  }),
+                },
+              },
+            },
+            "429": {
+              description:
+                "Session-creation limit exhausted (`rate_limited`, Retry-After)",
+              content: {
+                "application/problem+json": {
+                  schema: zodToJsonSchema(problemDetailsSchema, {
+                    target: "openApi3",
+                  }),
+                },
+              },
+            },
+          },
+        },
+      },
+      "/v1/public/submissions": {
+        post: {
+          operationId: "submitPublicForm",
+          tags: ["forms"],
+          summary:
+            "Submit answers for a public session (UNauthenticated, cookie-less)",
+          description:
+            "ONE transaction per spec: resolve the session by the SHA-256 of the raw X-Form-Session token (resolve_form_session), reject unknown (404), expired-beyond-grace (410) or completed sessions, verify the form is still published and the pinned version exists (409 form_closed), validate the answers against the PINNED schema (422 with stable per-answer codes), lock the form row and enforce the per-form submission cap (409 form_full), insert the submission (UNIQUE form_session_id makes retries idempotent — the loser of a concurrent race gets the SAME receipt), mark the session completed, and write the submission.created audit row + outbox event. Stored answers are never returned. app.workspace_id always comes from the resolved session, never from the client.",
+          parameters: [
+            {
+              name: "X-Form-Session",
+              in: "header",
+              required: true,
+              schema: { type: "string" },
+              description: "The raw session token from session creation.",
+            },
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: zodToJsonSchema(submitRequestSchema, {
+                  target: "openApi3",
+                }),
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description:
+                "The idempotent receipt (first submit or a retry/race loser)",
+              content: {
+                "application/json": {
+                  schema: zodToJsonSchema(submitReceiptSchema, {
+                    target: "openApi3",
+                  }),
+                },
+              },
+            },
+            "401": {
+              description: "Missing X-Form-Session header (`session_required`)",
+              content: {
+                "application/problem+json": {
+                  schema: zodToJsonSchema(problemDetailsSchema, {
+                    target: "openApi3",
+                  }),
+                },
+              },
+            },
+            "404": {
+              description: "Unknown session token (`session_not_found`)",
+              content: {
+                "application/problem+json": {
+                  schema: zodToJsonSchema(problemDetailsSchema, {
+                    target: "openApi3",
+                  }),
+                },
+              },
+            },
+            "409": {
+              description:
+                "Form closed or deleted (`form_closed`), per-form submission cap reached (`form_full`), or a completed session without a stored submission (`session_completed`)",
+              content: {
+                "application/problem+json": {
+                  schema: zodToJsonSchema(problemDetailsSchema, {
+                    target: "openApi3",
+                  }),
+                },
+              },
+            },
+            "410": {
+              description:
+                "Session expired beyond the 5-minute grace window (`session_expired`)",
+              content: {
+                "application/problem+json": {
+                  schema: zodToJsonSchema(problemDetailsSchema, {
+                    target: "openApi3",
+                  }),
+                },
+              },
+            },
+            "413": {
+              description:
+                "Body exceeds the route's configured 150 KB JSON limit",
+            },
+            "422": {
+              description:
+                "Answer validation against the pinned schema failed (`validation_failed` with per-answer codes: `unknown_block_id`, `answer_to_non_question`, `required_answer_missing`, `answer_too_long`, `invalid_character`, `submission_too_large`, `invalid_answer_type`)",
+              content: {
+                "application/problem+json": {
+                  schema: zodToJsonSchema(problemDetailsSchema, {
+                    target: "openApi3",
+                  }),
+                },
+              },
+            },
+            "429": {
+              description: "Session-creation limit exhausted on the paired session route (`rate_limited`)",
+            },
+          },
+        },
+      },
       "/v1/forms/{formId}/draft": {
         put: {
           operationId: "saveFormDraft",
@@ -629,6 +788,15 @@ export function buildOpenApiDocument(): Record<string, unknown> {
           target: "openApi3",
         }),
         PublicFormResponse: zodToJsonSchema(publicFormResponseSchema, {
+          target: "openApi3",
+        }),
+        SessionCreateResponse: zodToJsonSchema(sessionCreateResponseSchema, {
+          target: "openApi3",
+        }),
+        SubmitRequest: zodToJsonSchema(submitRequestSchema, {
+          target: "openApi3",
+        }),
+        SubmitReceipt: zodToJsonSchema(submitReceiptSchema, {
           target: "openApi3",
         }),
       },
