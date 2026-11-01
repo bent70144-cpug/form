@@ -160,3 +160,41 @@ export const renameFormRequestSchema = z
 export type RenameFormRequest = z.infer<typeof renameFormRequestSchema>;
 
 export const renameFormResponseSchema = formSummarySchema;
+
+/**
+ * `PUT /v1/forms/{formId}/draft` (ticket 07) — replaces the FULL draft schema
+ * atomically with optimistic concurrency: the caller sends the last-seen
+ * `draftVersion`; a mismatch answers 409 `draft_conflict` (another tab saved
+ * first) instead of overwriting.
+ *
+ * The `schema` VALUE is validated by the shared `@form/form-schema` engine
+ * (`validateDraftSchema`) whose stable issue codes travel as field errors, so
+ * this wire contract stays deliberately loose about the envelope's inner
+ * shape — it only pins the wrapper and the optimistic token.
+ */
+export const draftSaveRequestSchema = z
+  .object({
+    schema: z.unknown(),
+    draftVersion: z.number().int().min(0),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.schema === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["schema"],
+        message: "Required",
+      });
+    }
+  });
+
+export type DraftSaveRequest = z.infer<typeof draftSaveRequestSchema>;
+
+/** `PUT /v1/forms/{formId}/draft` success body — the NEW draft version. */
+export const draftSaveResponseSchema = z
+  .object({
+    draftVersion: z.number().int().min(1),
+  })
+  .strict();
+
+export type DraftSaveResponse = z.infer<typeof draftSaveResponseSchema>;

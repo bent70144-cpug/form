@@ -157,6 +157,43 @@ export const en = {
     rateLimited: { title: "Too many requests" },
     internal: { title: "Unexpected error" },
     notImplemented: { title: "Not implemented" },
+    draftConflict: {
+      title: "Conflict",
+      detail:
+        "The draft was saved from another tab or session. Reload the form and re-apply your changes.",
+    },
+    /** Human-readable messages for the shared schema engine's stable issue
+     * codes (draft save field errors, ticket 07). Keyed off the codes —
+     * never the other way round. */
+    schemaIssues: {
+      unsupported_schema_version:
+        "This form uses a schema version that cannot be handled here.",
+      unsupported_block_kind: "This block kind is not supported.",
+      invalid_block_id: "Block IDs must be 10–32 URL-safe characters.",
+      duplicate_block_id: "Block IDs must be unique within the form.",
+      title_too_long: "Titles are limited to 200 characters.",
+      label_too_long: "Labels are limited to 500 characters.",
+      description_too_long: "Descriptions are limited to 2,000 characters.",
+      placeholder_too_long: "Placeholders are limited to 200 characters.",
+      too_many_blocks: "Forms are limited to 200 blocks.",
+      schema_too_large: "The draft schema exceeds the 256 KB limit.",
+      invalid_character:
+        "This text contains a character that cannot be stored.",
+      unknown_field: "This field is not part of the schema.",
+      invalid_type: "This value has the wrong type.",
+      no_question_blocks: "At least one question block is required.",
+      multiple_welcome_blocks: "Only one welcome block is allowed.",
+      multiple_ending_blocks: "Only one ending block is allowed.",
+      welcome_not_first: "The welcome block must be the first block.",
+      ending_not_last: "The ending block must be the last block.",
+      empty_label: "Labels and titles cannot be empty.",
+      unknown_block_id: "No block exists with this ID.",
+      answer_to_non_question: "This block does not accept answers.",
+      required_answer_missing: "This answer is required.",
+      answer_too_long: "This answer is too long.",
+      submission_too_large: "The submission is too large.",
+      invalid_answer_type: "This answer has the wrong type.",
+    },
     emailUnverified: {
       title: "Email not verified",
       detail: "Verify your email address before accessing this resource.",

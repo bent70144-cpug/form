@@ -15,6 +15,8 @@ export const ErrorCodes = {
   form_full: "form_full",
   invalid_character: "invalid_character",
   schema_too_large: "schema_too_large",
+  too_many_blocks: "too_many_blocks",
+  unsupported_schema_version: "unsupported_schema_version",
   submission_too_large: "submission_too_large",
   rate_limited: "rate_limited",
   internal_error: "internal_error",

@@ -9,6 +9,8 @@ import {
 import {
   createFormRequestSchema,
   createFormResponseSchema,
+  draftSaveRequestSchema,
+  draftSaveResponseSchema,
   formDetailSchema,
   formSummarySchema,
   listFormsResponseSchema,
@@ -41,7 +43,7 @@ export function buildOpenApiDocument(): Record<string, unknown> {
       {
         name: "forms",
         description:
-          "Form create/list/read/rename in the active workspace (draft save arrives with ticket 07)",
+          "Form create/list/read/rename and draft save in the active workspace",
       },
     ],
     paths: {
@@ -375,6 +377,82 @@ export function buildOpenApiDocument(): Record<string, unknown> {
           },
         },
       },
+      "/v1/forms/{formId}/draft": {
+        put: {
+          operationId: "saveFormDraft",
+          tags: ["forms"],
+          summary: "Replace the form's FULL draft schema atomically",
+          description:
+            "Optimistic concurrency on `draftVersion`: the caller sends the last-seen integer; a mismatch answers 409 `draft_conflict` instead of overwriting another tab's save, and success increments `draftVersion` by 1. The envelope is migrated through the schemaVersion registry and validated by the shared schema engine — structural, limit, ID and NUL failures answer 422 with the engine's stable codes as field errors. The body parser limit for this route is explicitly configured at 300 KB (larger bodies answer 413 before validation).",
+          parameters: [
+            {
+              name: "formId",
+              in: "path",
+              required: true,
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: zodToJsonSchema(draftSaveRequestSchema, {
+                  target: "openApi3",
+                }),
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description: "Draft saved; returns the NEW draft version",
+              content: {
+                "application/json": {
+                  schema: zodToJsonSchema(draftSaveResponseSchema, {
+                    target: "openApi3",
+                  }),
+                },
+              },
+            },
+            "401": {
+              description: "Absent, invalid, expired, or revoked session",
+            },
+            "403": {
+              description:
+                "Email not verified or no workspace yet (`forbidden`)",
+            },
+            "404": {
+              description:
+                "Unknown id or a form of another workspace (`not_found`)",
+            },
+            "409": {
+              description:
+                "Stale `draftVersion` — another save landed first (`draft_conflict`)",
+              content: {
+                "application/problem+json": {
+                  schema: zodToJsonSchema(problemDetailsSchema, {
+                    target: "openApi3",
+                  }),
+                },
+              },
+            },
+            "413": {
+              description:
+                "Body exceeds the route's configured 300 KB JSON limit",
+            },
+            "422": {
+              description:
+                "Invalid wrapper (`validation_failed`) or schema-engine rejections (stable field codes: `unsupported_schema_version`, `invalid_character`, `schema_too_large`, `too_many_blocks`, `duplicate_block_id`, `invalid_block_id`, `unsupported_block_kind`, `unknown_field`, `*_too_long`, ...)",
+              content: {
+                "application/problem+json": {
+                  schema: zodToJsonSchema(problemDetailsSchema, {
+                    target: "openApi3",
+                  }),
+                },
+              },
+            },
+          },
+        },
+      },
     },
     components: {
       schemas: {
@@ -400,6 +478,9 @@ export function buildOpenApiDocument(): Record<string, unknown> {
           target: "openApi3",
         }),
         RenameFormResponse: zodToJsonSchema(renameFormResponseSchema, {
+          target: "openApi3",
+        }),
+        DraftSaveResponse: zodToJsonSchema(draftSaveResponseSchema, {
           target: "openApi3",
         }),
       },

@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   Res,
   UseGuards,
@@ -17,12 +18,23 @@ import type { ZodIssue } from "zod/v3";
 import {
   createFormRequestSchema,
   createFormResponseSchema,
+  draftSaveRequestSchema,
+  draftSaveResponseSchema,
   listFormsRequestSchema,
   renameFormRequestSchema,
   renameFormResponseSchema,
   type ListFormsResponse,
 } from "@form/contracts";
 import { isUuid, type TenantDb } from "@form/database";
+import {
+  ISSUE_CODES,
+  migrateSchema,
+  SchemaMigrationError,
+  validateDraftSchema,
+  type Issue,
+  type IssueCode,
+} from "@form/form-schema";
+import { t, type MessageKey } from "@form/i18n";
 import type { AuthSession } from "@form/auth/client";
 import {
   CurrentSession,
@@ -49,6 +61,8 @@ import { FormsService } from "./forms.service";
  *                                100), newest first by (created_at, id)
  *   GET    /v1/forms/{id}        read form + draft (draftVersion + envelope)
  *   PATCH  /v1/forms/{id}        rename the DASHBOARD label only
+ *   PUT    /v1/forms/{id}/draft  replace the FULL draft schema atomically
+ *                                (ticket 07; optimistic `draftVersion`)
  *
  * Every route requires a verified email (`EmailVerifiedGuard` — 401
  * `unauthenticated` / 403 `email_unverified`) and the FULL tenant context
@@ -181,6 +195,100 @@ export class FormsController {
     res.json(renameFormResponseSchema.parse(summary));
   }
 
+  /**
+   * Draft save (ticket 07): `PUT /v1/forms/{id}/draft` replaces the FULL
+   * draft schema atomically.
+   *
+   * Pipeline: contract parse (wrapper + optimistic token) → `migrateSchema`
+   * (future schemaVersions land explicitly; unregistered ones answer 422
+   * `unsupported_schema_version`) → the shared engine's `validateDraftSchema`
+   * (its stable codes travel verbatim as field errors: NUL →
+   * `invalid_character`, byte cap → `schema_too_large`, >200 blocks →
+   * `too_many_blocks`, unknown kinds/fields, ID format/duplicates, character
+   * limits) → the service's single guarded UPDATE (409 `draft_conflict` on a
+   * stale `draftVersion` — another tab's save is never overwritten).
+   *
+   * The request body is parsed by THIS route's own 300 KB JSON parser (see
+   * app.ts — configured, not inherited); oversized bodies answer 413 there.
+   */
+  @Put(":formId/draft")
+  @RequireVerifiedEmail()
+  @RequireWorkspaceContext()
+  async saveDraft(
+    @TenantDbHandle() tenantDb: TenantDb | undefined,
+    @CurrentSession() session: AuthSession | undefined,
+    @Param("formId") formId: string,
+    @Res() res: Response,
+    @Body() body?: unknown,
+  ): Promise<void> {
+    if (!isUuid(formId)) {
+      sendProblem(res, 404, "not_found");
+      return;
+    }
+    const parsed = draftSaveRequestSchema.safeParse(body ?? {});
+    if (!parsed.success) {
+      this.validationProblem(res, parsed.error.issues);
+      return;
+    }
+
+    // Migrate FIRST so future schemaVersions land explicitly through the
+    // registry (v1 is identity); the MIGRATED envelope is what gets validated
+    // and stored. Arrays/scalars fall through to the engine, which maps them
+    // to the accurate root `invalid_type`.
+    const raw = parsed.data.schema;
+    let envelope: unknown = raw;
+    if (typeof raw === "object" && raw !== null && !Array.isArray(raw)) {
+      try {
+        envelope = migrateSchema(raw);
+      } catch (error) {
+        if (error instanceof SchemaMigrationError) {
+          sendProblem(res, 422, "validation_failed", {
+            errors: [
+              {
+                path: "schema.schemaVersion",
+                code: error.code,
+                message: t("errors.schemaIssues.unsupported_schema_version"),
+              },
+            ],
+          });
+          return;
+        }
+        throw error;
+      }
+    }
+
+    const result = validateDraftSchema(envelope);
+    if (!result.ok) {
+      sendProblem(res, 422, "validation_failed", {
+        errors: result.issues.map((issue) => ({
+          path: issue.path,
+          code: issue.code,
+          message: schemaIssueMessage(issue.code),
+        })),
+      });
+      return;
+    }
+
+    const outcome = await this.forms.saveDraft(
+      tenantDb!,
+      formId,
+      session!.userId,
+      result.value,
+      parsed.data.draftVersion,
+    );
+    if (outcome === null) {
+      sendProblem(res, 404, "not_found");
+      return;
+    }
+    if (outcome === "conflict") {
+      sendProblem(res, 409, "draft_conflict", {
+        detail: t("errors.draftConflict.detail"),
+      });
+      return;
+    }
+    res.json(draftSaveResponseSchema.parse(outcome));
+  }
+
   /** Shared 422 writer (RFC 9457 + stable code + field errors). */
   private validationProblem(res: Response, issues: ZodIssue[]): void {
     sendProblem(res, 422, "validation_failed", {
@@ -191,4 +299,15 @@ export class FormsController {
       })),
     });
   }
+}
+
+/** The stable engine codes are the contract; their messages come from i18n. */
+const SCHEMA_ISSUE_MESSAGE_KEYS = new Map<IssueCode, MessageKey>(
+  ISSUE_CODES.map((code) => [code, `errors.schemaIssues.${code}` as MessageKey]),
+);
+
+function schemaIssueMessage(code: Issue["code"]): string {
+  const key = SCHEMA_ISSUE_MESSAGE_KEYS.get(code);
+  // Catalog drift is a programming error — t() throws on a missing key.
+  return key ? t(key) : t("errors.validation.title");
 }
