@@ -19,6 +19,10 @@ import { APP_DB_POOL } from "../db/app-db";
 import { WorkspaceService } from "./workspace.service";
 
 /**
+ * PRODUCTION tenant interceptor (registered globally in app.module.ts);
+ * `tenant-interceptor.ts` keeps the probe-only variant used solely by
+ * workspace-probe.controller.ts.
+ *
  * Tenant request context (spec, "Tenancy and authorization": "A Nest
  * interceptor for authenticated workspace routes opens the transaction,
  * sets `app.user_id` from the verified session, resolves the user's active

@@ -8,6 +8,12 @@ import { z } from "zod";
  * these schemas before doing any work. A missing or invalid value throws
  * `EnvValidationError` with a human-readable summary of ALL problems, so a
  * misconfigured deploy fails fast instead of limping along.
+ *
+ * Source of truth per entrypoint: the API's richer schema (auth secret, email
+ * transport, trusted-proxy knobs) lives in `apps/api/src/env.ts`; the web app
+ * has its dependency-free guard in `apps/web/src/lib/env.ts`. The schemas here
+ * cover the worker, the migrator/bootstrap CLIs, and the web-schema mirror
+ * used by config-level tests.
  */
 
 export class EnvValidationError extends Error {
@@ -59,24 +65,19 @@ export function loadEnv<S extends z.ZodTypeAny>(
   return result.data;
 }
 
-/** API process (NestJS). Pooled app_user URL — never the migrator URL. */
-export const apiEnvSchema = z.object({
-  NODE_ENV: nodeEnv,
-  PORT: z.coerce.number().int().positive().default(4000),
-  /** Pooled connection string used by request handling (role: app_user). */
-  DATABASE_URL: postgresUrl,
-  /** Public origin of the web app (used for the Origin check). */
-  APP_ORIGIN: z.string().url(),
-  LOG_LEVEL: logLevel.default("info"),
-});
-export type ApiEnv = z.infer<typeof apiEnvSchema>;
-
-/** Worker process. Separate non-pooled role: worker_user. */
+/**
+ * Worker process. Separate non-pooled role: worker_user.
+ *
+ * HEARTBEAT_INTERVAL_MS is the single source of truth for the heartbeat AND
+ * outbox-dispatch cadence (the dispatcher reuses the same schedule mechanism,
+ * ADR-0003/0005). Default 30s — the documented alpha trade-off between Neon
+ * suspend-awake churn and dispatch latency.
+ */
 export const workerEnvSchema = z.object({
   NODE_ENV: nodeEnv,
   WORKER_DATABASE_URL: postgresUrl,
   LOG_LEVEL: logLevel.default("info"),
-  HEARTBEAT_INTERVAL_MS: z.coerce.number().int().positive().default(10_000),
+  HEARTBEAT_INTERVAL_MS: z.coerce.number().int().positive().default(30_000),
 });
 export type WorkerEnv = z.infer<typeof workerEnvSchema>;
 

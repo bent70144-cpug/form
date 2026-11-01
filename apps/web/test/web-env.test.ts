@@ -1,10 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   FORBIDDEN_WEB_ENV_KEYS,
   WEB_ENV_KEYS,
   WebEnvError,
   loadWebEnv,
 } from "../src/lib/env";
+import { register } from "../src/instrumentation";
 
 /**
  * Web env schema (spec: "The web app has no database URL or auth secret").
@@ -74,5 +75,43 @@ describe("loadWebEnv", () => {
     expect(() => loadWebEnv({ API_INTERNAL_PORT: "99999" })).toThrow(WebEnvError);
     expect(() => loadWebEnv({ PORT: "zero" })).toThrow(WebEnvError);
     expect(() => loadWebEnv({ NODE_ENV: "staging" })).toThrow(WebEnvError);
+  });
+});
+
+describe("instrumentation.register (startup env guard)", () => {
+  const SAVED_ENV = { ...process.env };
+
+  afterEach(() => {
+    for (const key of Object.keys(process.env)) {
+      if (!(key in SAVED_ENV)) delete process.env[key];
+    }
+    for (const [key, value] of Object.entries(SAVED_ENV)) {
+      process.env[key] = value;
+    }
+  });
+
+  /** Point the runtime gate at nodejs (what `next start` runs as). */
+  function withNodeRuntime(): void {
+    process.env.NEXT_RUNTIME = "nodejs";
+    for (const key of FORBIDDEN_WEB_ENV_KEYS) delete process.env[key];
+  }
+
+  it("validates the environment once per server start on a clean public env", async () => {
+    withNodeRuntime();
+    await expect(register()).resolves.toBeUndefined();
+  });
+
+  it("fails server startup when a secret leaked into the web process", async () => {
+    withNodeRuntime();
+    process.env.DATABASE_URL = "postgres://app_user:x@127.0.0.1:5433/leak";
+    await expect(register()).rejects.toThrow(WebEnvError);
+    await expect(register()).rejects.toThrow(/DATABASE_URL/);
+  });
+
+  it("does nothing off the nodejs runtime (edge-safe per Next docs)", async () => {
+    delete process.env.NEXT_RUNTIME;
+    // Even with a forbidden key present — the gate never touches env on edge.
+    process.env.BETTER_AUTH_SECRET = "leak-should-not-matter";
+    await expect(register()).resolves.toBeUndefined();
   });
 });
